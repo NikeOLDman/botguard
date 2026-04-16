@@ -1,0 +1,67 @@
+menu:
+  group: bot_guard
+  position: 2020
+
+order_by:
+  id: asc
+
+sortable_fields:
+  id: id
+  enabled: enabled
+  blockEmptyUserAgent: blockEmptyUserAgent
+  loggingEnabled: loggingEnabled
+  blockStatusCode: blockStatusCode
+  retentionDays: retentionDays
+  updatedAt: updatedAt
+
+view:
+  index:
+    template: 'admin/bot_guard/settings/index.html.twig'
+    fields:
+      id: ~
+      enabled:
+        size: xl
+        type: checkbox
+      blockEmptyUserAgent:
+        size: xl
+        type: checkbox
+      loggingEnabled:
+        size: xl
+        type: checkbox
+      blockStatusCode:
+        size: xl
+      retentionDays:
+        size: xl
+      updatedAt:
+        size: xl
+        type: datetime
+
+form:
+  filter:
+    fields:
+      enabled:
+        compare_strict: false
+      blockEmptyUserAgent:
+        compare_strict: false
+      loggingEnabled:
+        compare_strict: false
+      blockStatusCode:
+      retentionDays:
+  index:
+    fields:
+      enabled: ~
+      blockEmptyUserAgent: ~
+      loggingEnabled: ~
+      blockStatusCode: ~
+      retentionDays: ~
+  edit:
+    fields:
+      enabled: ~
+      blockEmptyUserAgent: ~
+      loggingEnabled: ~
+      blockStatusCode: ~
+      retentionDays:
+        options:
+          attr:
+            min: 1
+            max: 3650

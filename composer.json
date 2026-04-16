@@ -1,0 +1,11 @@
+{
+    "name": "darvinstudio/bot-guard-module",
+    "description": "BotGuard module installer for DarvinCms projects.",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": ">=7.2.5",
+        "darvinstudio/darvin-admin-bundle": "^6.6",
+        "darvinstudio/darvin-admin-frontend-bundle": "^6.2"
+    }
+}

@@ -1,0 +1,100 @@
+menu:
+  group: bot_guard
+  position: 2020
+
+order_by:
+  priority: asc
+
+searchable_fields:
+  - name
+  - pattern
+  - uriPattern
+  - type
+
+sortable_fields:
+  id: id
+  active: active
+  priority: priority
+  name: name
+  type: type
+  uriPattern: uriPattern
+  createdAt: createdAt
+  updatedAt: updatedAt
+
+view:
+  index:
+    template: 'admin/bot_guard/rule/index.html.twig'
+    fields:
+      id: ~
+      active:
+        type: checkbox
+      priority: ~
+      name:
+        size: xl
+      type:
+        size: xl
+      pattern:
+        size: xl
+      uriPattern:
+        size: xxxl
+      createdAt:
+        type: datetime
+      updatedAt:
+        type: datetime
+
+form:
+  filter:
+    fields:
+      active:
+        compare_strict: false
+      type:
+        type: Symfony\Component\Form\Extension\Core\Type\ChoiceType
+        options:
+          required: false
+          placeholder: Все типы
+          choices:
+            bot_guard_rule.type.user_agent_contains: user_agent_contains
+            bot_guard_rule.type.user_agent_regex: user_agent_regex
+            bot_guard_rule.type.ip_exact: ip_exact
+            bot_guard_rule.type.uri_contains: uri_contains
+      name:
+      pattern:
+      uriPattern:
+  index:
+    fields:
+      active: ~
+      priority: ~
+      name: ~
+      type:
+        type: Symfony\Component\Form\Extension\Core\Type\ChoiceType
+        options:
+          choices:
+            bot_guard_rule.type.user_agent_contains: user_agent_contains
+            bot_guard_rule.type.user_agent_regex: user_agent_regex
+            bot_guard_rule.type.ip_exact: ip_exact
+            bot_guard_rule.type.uri_contains: uri_contains
+      pattern: ~
+      uriPattern:
+        options:
+          required: false
+          attr:
+            placeholder: /catalog или xmlrpc.php (пусто = для всех URI)
+  edit:
+    fields:
+      active: ~
+      priority: ~
+      name: ~
+      type:
+        type: Symfony\Component\Form\Extension\Core\Type\ChoiceType
+        options:
+          choices:
+            bot_guard_rule.type.user_agent_contains: user_agent_contains
+            bot_guard_rule.type.user_agent_regex: user_agent_regex
+            bot_guard_rule.type.ip_exact: ip_exact
+            bot_guard_rule.type.uri_contains: uri_contains
+      pattern: ~
+      uriPattern:
+        options:
+          required: false
+          attr:
+            placeholder: /catalog или xmlrpc.php (пусто = для всех URI)

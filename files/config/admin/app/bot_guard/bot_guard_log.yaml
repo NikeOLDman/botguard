@@ -1,0 +1,74 @@
+menu:
+  group: bot_guard
+  position: 2020
+
+order_by:
+  blockedAt: desc
+
+searchable_fields:
+  - reason
+  - ruleName
+  - rulePattern
+  - ip
+  - uri
+  - userAgent
+
+sortable_fields:
+  id: id
+  blockedAt: blockedAt
+  statusCode: statusCode
+  reason: reason
+  ip: ip
+  method: method
+  uri: uri
+  ruleName: ruleName
+
+view:
+  index:
+    template: 'admin/bot_guard/log/index.html.twig'
+    fields:
+      id: ~
+      blockedAt:
+        type: datetime
+      statusCode:
+      reason:
+      ruleName:
+      ip:
+      method:
+      uri:
+        size: xxxl
+      userAgent:
+        size: xxxl
+
+form:
+  filter:
+    fields:
+      blockedAt:
+      statusCode:
+      reason:
+      ruleName:
+      ip:
+      method:
+      uri:
+      userAgent:
+  index:
+    fields:
+#      blockedAt: ~
+#      statusCode: ~
+#      reason: ~
+#      ruleName: ~
+#      ip: ~
+#      method: ~
+#      uri: ~
+#      userAgent: ~
+  edit:
+    fields:
+      reason: ~
+      ruleName: ~
+      rulePattern: ~
+      ip: ~
+      method: ~
+      uri: ~
+      userAgent: ~
+      statusCode: ~
+      blockedAt: ~

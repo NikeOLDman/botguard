@@ -1,0 +1,78 @@
+menu:
+    group:
+        bot_guard:
+            title: Защита от ботов
+
+bot_guard_log:
+    action:
+        index:
+            title: Журнал блокировок
+            link: Журнал
+        new:
+            title: Добавить запись журнала
+            link: Добавить запись
+        show:
+            title: Просмотр журнала
+        edit:
+            title: Редактировать запись журнала
+    entity:
+        id: ID
+        reason: Причина
+        rule_name: Правило
+        rule_pattern: Шаблон правила
+        ip: IP адрес
+        method: Метод
+        uri: URI
+        user_agent: User-Agent
+        status_code: Код ответа
+        blocked_at: Время блокировки
+
+bot_guard_settings:
+    action:
+        index:
+            title: Настройки Bot Guard
+            link: Настройки
+        new:
+            title: Добавить настройки Bot Guard
+            link: Добавить настройки
+        show:
+            title: Просмотр настроек Bot Guard
+        edit:
+            title: Редактировать настройки Bot Guard
+    entity:
+        id: ID
+        enabled: Защита включена
+        block_empty_user_agent: Блокировать пустой User-Agent
+        logging_enabled: Вести журнал блокировок
+        block_status_code: Код ответа при блокировке
+        retention_days: Хранить логи (дней)
+        updated_at: Обновлено
+
+bot_guard_rule:
+    action:
+        index:
+            title: Правила блокировки
+            link: Правила
+        new:
+            title: Добавить правило блокировки
+            link: Добавить правило
+        show:
+            title: Просмотр правил блокировки
+        edit:
+            title: Редактировать правило блокировки
+    entity:
+        id: ID
+        active: Активно
+        priority: Приоритет
+        type: Тип правила
+        name: Название
+        pattern: Шаблон
+        uri_pattern: URI (ограничение)
+        created_at: Создано
+        updated_at: Обновлено
+    type:
+        user_agent_contains: User-Agent содержит
+        user_agent_regex: User-Agent по регулярному выражению
+        ip_exact: Точный IP
+        uri_contains: URI содержит
+

@@ -1,0 +1,86 @@
+{% extends '@DarvinAdmin/crud/_index.html.twig' %}
+
+{% set stats = bot_guard_stats(14) %}
+{% set maxDaily = 1 %}
+{% for day in stats.daily %}
+    {% if day.count > maxDaily %}
+        {% set maxDaily = day.count %}
+    {% endif %}
+{% endfor %}
+
+{% block content %}
+    <style>
+        .bot-guard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}
+        .bot-guard-card{background:#fff;border:1px solid #e6ebf2;border-radius:10px;padding:12px 14px;box-shadow:0 2px 10px rgba(15,23,42,.04)}
+        .bot-guard-card__label{font-size:12px;color:#6b7280;margin-bottom:6px}
+        .bot-guard-card__value{font-size:24px;line-height:1.1;font-weight:700;color:#1f2937}
+        .bot-guard-top{font-size:12px;color:#6b7280;margin-top:6px}
+        .bot-guard-chart{background:#fff;border:1px solid #e6ebf2;border-radius:10px;padding:14px;margin-bottom:16px}
+        .bot-guard-bars{display:flex;gap:6px}
+        .bot-guard-bar-wrap{flex:1;min-width:10px;position:relative}
+        .bot-guard-bar-area{height:140px;display:flex;align-items:flex-end;position:relative}
+        .bot-guard-bar{width:100%;background:linear-gradient(180deg,#63a5ff,#2563eb);border-radius:6px 6px 0 0;min-height:2px}
+        .bot-guard-bar-value{position:absolute;left:50%;transform:translateX(-50%);font-size:10px;color:#475569;line-height:1;background:#fff;padding:1px 3px;border-radius:4px;pointer-events:none}
+        .bot-guard-bar-date{margin-top:6px;font-size:10px;color:#6b7280;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    </style>
+
+    <div class="bot-guard-grid">
+        <div class="bot-guard-card">
+            <div class="bot-guard-card__label">Всего блокировок</div>
+            <div class="bot-guard-card__value">{{ stats.total }}</div>
+        </div>
+        <div class="bot-guard-card">
+            <div class="bot-guard-card__label">Сегодня</div>
+            <div class="bot-guard-card__value">{{ stats.today }}</div>
+        </div>
+        <div class="bot-guard-card">
+            <div class="bot-guard-card__label">Последние 24 часа</div>
+            <div class="bot-guard-card__value">{{ stats.last24h }}</div>
+        </div>
+        <div class="bot-guard-card">
+            <div class="bot-guard-card__label">Последние 7 дней</div>
+            <div class="bot-guard-card__value">{{ stats.last7d }}</div>
+        </div>
+        <div class="bot-guard-card">
+            <div class="bot-guard-card__label">Топ-правило</div>
+            <div class="bot-guard-card__value" style="font-size:16px;">
+                {{ stats.topRule ? stats.topRule.name : '—' }}
+            </div>
+            <div class="bot-guard-top">{{ stats.topRule ? stats.topRule.count ~ ' срабатываний' : 'Нет данных' }}</div>
+        </div>
+        <div class="bot-guard-card">
+            <div class="bot-guard-card__label">Топ IP</div>
+            <div class="bot-guard-card__value" style="font-size:16px;">
+                {{ stats.topIp ? stats.topIp.ip : '—' }}
+            </div>
+            <div class="bot-guard-top">{{ stats.topIp ? stats.topIp.count ~ ' запросов' : 'Нет данных' }}</div>
+        </div>
+    </div>
+
+    <div class="bot-guard-chart">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;">Блокировки за 14 дней</div>
+        <div class="bot-guard-bars">
+            {% for day in stats.daily %}
+                {% set h = ((day.count / maxDaily) * 100)|round(2) %}
+                <div class="bot-guard-bar-wrap" title="{{ day.day }}: {{ day.count }}">
+                    <div class="bot-guard-bar-area">
+                        <div class="bot-guard-bar" style="height: {{ h }}%;"></div>
+                        <div class="bot-guard-bar-value" style="bottom: calc({{ h }}% + 4px);">{{ day.count }}</div>
+                    </div>
+                    <div class="bot-guard-bar-date">{{ day.day|slice(8, 2) }}.{{ day.day|slice(5, 2) }}</div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {{ parent() }}
+{% endblock %}
+
+{% block extra_controls %}
+    <a class="page-header__btn-add"
+       href="{{ path('app_admin_bot_guard_cleanup') }}"
+       onclick="return confirm('Удалить записи Bot Guard старше срока хранения из настроек?');">
+        Очистить старые логи
+    </a>
+{% endblock %}
+

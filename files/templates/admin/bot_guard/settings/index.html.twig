@@ -1,0 +1,12 @@
+{% extends '@DarvinAdmin/crud/_index.html.twig' %}
+
+{% block content %}
+    <style>
+        .bot-guard-settings-note{background:linear-gradient(90deg,#eff6ff,#f8fafc);border:1px solid #dbeafe;border-radius:10px;padding:12px 14px;margin-bottom:16px;color:#334155}
+    </style>
+    <div class="bot-guard-settings-note">
+        В этом разделе включается защита, блок пустого <code>User-Agent</code>, логирование и код ответа для блокировок.
+    </div>
+    {{ parent() }}
+{% endblock %}
+

@@ -1,0 +1,13 @@
+darvin_admin:
+
+    sections:
+        App\Entity\BotGuard\BotGuardSettings: '%kernel.project_dir%/config/admin/app/bot_guard/bot_guard_settings.yaml'
+        App\Entity\BotGuard\BotGuardRule:     '%kernel.project_dir%/config/admin/app/bot_guard/bot_guard_rule.yaml'
+        App\Entity\BotGuard\BotGuardLog:      '%kernel.project_dir%/config/admin/app/bot_guard/bot_guard_log.yaml'
+
+    menu:
+        groups:
+            app:
+                position: -1
+            bot_guard:
+                position: 33

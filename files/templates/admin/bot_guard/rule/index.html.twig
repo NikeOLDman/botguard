@@ -1,0 +1,24 @@
+{% extends '@DarvinAdmin/crud/_index.html.twig' %}
+
+{% block content %}
+    <style>
+        .bot-guard-hint{background:#f8fbff;border:1px solid #dbeafe;border-radius:10px;padding:12px 14px;margin-bottom:16px;color:#374151}
+        .bot-guard-hint b{color:#1f2937}
+        .bot-guard-hint ul{margin:8px 0 0 18px;padding:0}
+        .bot-guard-hint li{margin:4px 0}
+        .bot-guard-hint code{background:#eef2ff;padding:1px 5px;border-radius:4px}
+    </style>
+    <div class="bot-guard-hint">
+        <b>Памятка по типам правил:</b> сначала срабатывают правила с меньшим <b>priority</b>.
+        <ul>
+            <li><b>User-Agent содержит</b> — блокировка по части строки UA. Пример: <code>GPTBot</code>.</li>
+            <li><b>User-Agent по регулярному выражению</b> — сложные шаблоны. Пример: <code>/gptbot|claudebot|perplexity/i</code>.</li>
+            <li><b>Точный IP</b> — блокировка конкретного адреса. Пример: <code>203.0.113.77</code>.</li>
+            <li><b>URI содержит</b> — блокировка по фрагменту пути. Пример: <code>/wp-admin</code> или <code>xmlrpc.php</code>.</li>
+        </ul>
+        Для первых трех типов можно дополнительно заполнить поле <b>URI (ограничение)</b>:
+        если оставить пустым, правило работает для всех запросов; если указать значение, правило сработает только на URI, где есть этот фрагмент.
+    </div>
+    {{ parent() }}
+{% endblock %}
+
