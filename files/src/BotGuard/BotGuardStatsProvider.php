@@ -68,7 +68,7 @@ class BotGuardStatsProvider
 
     private function fetchInt(string $sql): int
     {
-        return (int) $this->connection->fetchOne($sql);
+        return (int) $this->fetchOneCompat($sql);
     }
 
     private function safeInt(string $sql): int
@@ -85,7 +85,7 @@ class BotGuardStatsProvider
      */
     private function fetchTopRules(int $limit): array
     {
-        $rows = $this->connection->fetchAllAssociative(sprintf("
+        $rows = $this->fetchAllAssociativeCompat(sprintf("
             SELECT COALESCE(rule_name, reason) AS top_name, COUNT(*) AS cnt
             FROM bot_guard_log
             GROUP BY COALESCE(rule_name, reason)
@@ -121,7 +121,7 @@ class BotGuardStatsProvider
      */
     private function fetchTopIps(int $limit): array
     {
-        $rows = $this->connection->fetchAllAssociative(sprintf("
+        $rows = $this->fetchAllAssociativeCompat(sprintf("
             SELECT ip, COUNT(*) AS cnt
             FROM bot_guard_log
             WHERE ip IS NOT NULL AND ip <> ''
@@ -161,7 +161,7 @@ class BotGuardStatsProvider
         $dbToday = new \DateTimeImmutable($this->fetchDbToday());
         $from = $dbToday->modify('-'.($days - 1).' days')->format('Y-m-d 00:00:00');
         $to = $dbToday->modify('+1 day')->format('Y-m-d 00:00:00');
-        $rows = $this->connection->fetchAllAssociative(sprintf("
+        $rows = $this->fetchAllAssociativeCompat(sprintf("
             SELECT DATE(blocked_at) AS day, COUNT(*) AS cnt
             FROM bot_guard_log
             WHERE blocked_at >= '%s'
@@ -194,7 +194,7 @@ class BotGuardStatsProvider
 
     private function fetchDbToday(): string
     {
-        $today = $this->connection->fetchOne("SELECT DATE_FORMAT(CURDATE(), '%Y-%m-%d')");
+        $today = $this->fetchOneCompat("SELECT DATE_FORMAT(CURDATE(), '%Y-%m-%d')");
 
         if (!is_string($today) || '' === trim($today)) {
             return (new \DateTimeImmutable('today'))->format('Y-m-d');
@@ -232,7 +232,7 @@ class BotGuardStatsProvider
      */
     private function fetchSuspiciousTop(int $limit): array
     {
-        $rows = $this->connection->fetchAllAssociative(sprintf("
+        $rows = $this->fetchAllAssociativeCompat(sprintf("
             SELECT
                 COALESCE(ip, '') AS ip,
                 COALESCE(user_agent, '') AS ua,
@@ -277,7 +277,7 @@ class BotGuardStatsProvider
      */
     private function fetchSystemCurrent(): array
     {
-        $row = $this->connection->fetchAssociative("
+        $row = $this->fetchAssociativeCompat("
             SELECT
                 load_1,
                 load_5,
@@ -343,7 +343,7 @@ class BotGuardStatsProvider
      */
     private function fetchSystemRecent(): array
     {
-        $rows = $this->connection->fetchAllAssociative("
+        $rows = $this->fetchAllAssociativeCompat("
             SELECT
                 DATE_FORMAT(sampled_at, '%H:%i') AS sample_time,
                 COALESCE(load_1, 0) AS load_1,
@@ -387,7 +387,7 @@ class BotGuardStatsProvider
         $dbToday = new \DateTimeImmutable($this->fetchDbToday());
         $from = $dbToday->modify('-'.($days - 1).' days')->format('Y-m-d 00:00:00');
         $to = $dbToday->modify('+1 day')->format('Y-m-d 00:00:00');
-        $rows = $this->connection->fetchAllAssociative(sprintf("
+        $rows = $this->fetchAllAssociativeCompat(sprintf("
             SELECT
                 DATE(sampled_at) AS day,
                 AVG(load_1) AS avg_load_1,
@@ -459,7 +459,7 @@ class BotGuardStatsProvider
      */
     private function fetchPeaksLastHour(): array
     {
-        $row = $this->connection->fetchAssociative("
+        $row = $this->fetchAssociativeCompat("
             SELECT
                 MAX(load_1) AS max_load_1,
                 MAX(mem_used_percent) AS max_mem_used_percent
@@ -575,6 +575,45 @@ class BotGuardStatsProvider
         $normalized = ($load / max(1, $cpuCores)) * 100;
 
         return round(max(0.0, min(100.0, $normalized)), 2);
+    }
+
+    /**
+     * @return mixed
+     */
+    private function fetchOneCompat(string $sql)
+    {
+        if (method_exists($this->connection, 'fetchOne')) {
+            return $this->connection->fetchOne($sql);
+        }
+
+        return $this->connection->fetchColumn($sql, [], 0);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function fetchAllAssociativeCompat(string $sql): array
+    {
+        if (method_exists($this->connection, 'fetchAllAssociative')) {
+            return $this->connection->fetchAllAssociative($sql);
+        }
+
+        /** @var array<int, array<string, mixed>> $rows */
+        $rows = $this->connection->fetchAll($sql);
+
+        return $rows;
+    }
+
+    /**
+     * @return array<string, mixed>|false
+     */
+    private function fetchAssociativeCompat(string $sql)
+    {
+        if (method_exists($this->connection, 'fetchAssociative')) {
+            return $this->connection->fetchAssociative($sql);
+        }
+
+        return $this->connection->fetchAssoc($sql);
     }
 }
 

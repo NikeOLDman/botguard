@@ -32,15 +32,15 @@ class BotGuardLogCleaner
     {
         $days = max(1, min(3650, $days));
         $threshold = (new \DateTimeImmutable())->modify('-'.$days.' days')->format('Y-m-d H:i:s');
-        $deletedBlocked = $this->connection->executeStatement(
+        $deletedBlocked = $this->executeStatementCompat(
             'DELETE FROM bot_guard_log WHERE blocked_at < :threshold',
             ['threshold' => $threshold]
         );
-        $deletedSuspicious = $this->connection->executeStatement(
+        $deletedSuspicious = $this->executeStatementCompat(
             'DELETE FROM bot_guard_suspicious_event WHERE created_at < :threshold',
             ['threshold' => $threshold]
         );
-        $deletedMetrics = $this->connection->executeStatement(
+        $deletedMetrics = $this->executeStatementCompat(
             'DELETE FROM bot_guard_system_metric WHERE sampled_at < :threshold',
             ['threshold' => $threshold]
         );
@@ -51,6 +51,15 @@ class BotGuardLogCleaner
             'bot_guard_system_metric' => $deletedMetrics,
             'total' => $deletedBlocked + $deletedSuspicious + $deletedMetrics,
         ];
+    }
+
+    private function executeStatementCompat(string $sql, array $params): int
+    {
+        if (method_exists($this->connection, 'executeStatement')) {
+            return $this->connection->executeStatement($sql, $params);
+        }
+
+        return (int) $this->connection->executeUpdate($sql, $params);
     }
 }
 
