@@ -45,6 +45,7 @@ bot_guard_settings:
         block_empty_user_agent: Блокировать пустой User-Agent
         logging_enabled: Вести журнал блокировок
         under_attack: Под атакой (cookie-проверка для всех страниц)
+        trust_referrer: Доверять с referrer (ставить cookie без редиректа при переходе с внешнего сайта)
         cookie_whitelist_user_agents: Белый список User-Agent для обхода cookie-проверки
         block_status_code: Код ответа при блокировке
         retention_days: Хранить логи (дней)

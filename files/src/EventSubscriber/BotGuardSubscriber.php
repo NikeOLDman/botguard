@@ -84,9 +84,11 @@ class BotGuardSubscriber implements EventSubscriberInterface
         $decision = $this->decideSafely($request);
 
         if (!empty($decision['challenge'])) {
-            $event->setResponse($this->createChallengeResponse($request));
+            if (!$this->shouldSkipChallengeByReferrer($request, $decision)) {
+                $event->setResponse($this->createChallengeResponse($request));
 
-            return;
+                return;
+            }
         }
 
         if (!$decision['blocked']) {
@@ -368,6 +370,26 @@ class BotGuardSubscriber implements EventSubscriberInterface
         $response->headers->setCookie($this->createAccessCookie($request));
 
         return $response;
+    }
+
+    /**
+     * @param array{blocked: bool, challenge: bool, reason: ?string, ruleName: ?string, rulePattern: ?string, statusCode: int} $decision
+     */
+    private function shouldSkipChallengeByReferrer(Request $request, array $decision): bool
+    {
+        if ('cookie_required' !== (string) ($decision['reason'] ?? null)) {
+            return false;
+        }
+
+        if ('1' === (string) $request->query->get(BotGuardDecider::CHALLENGE_QUERY_PARAM, '')) {
+            return false;
+        }
+
+        try {
+            return $this->decider->shouldSkipChallengeByReferrer($request);
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     private function buildChallengeTarget(Request $request): string

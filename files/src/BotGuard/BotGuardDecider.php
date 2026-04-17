@@ -96,7 +96,21 @@ class BotGuardDecider
     }
 
     /**
-     * @return array{enabled: bool, blockEmptyUserAgent: bool, loggingEnabled: bool, underAttack: bool, cookieWhitelistUas: string, statusCode: int}
+     * Доверяем только внешнему referrer, чтобы не ослаблять защиту на внутренних переходах.
+     */
+    public function shouldSkipChallengeByReferrer(Request $request): bool
+    {
+        $settings = $this->getSettingsData();
+
+        if (empty($settings['trustReferrer']) || !empty($settings['underAttack'])) {
+            return false;
+        }
+
+        return $this->hasExternalReferrer($request);
+    }
+
+    /**
+     * @return array{enabled: bool, blockEmptyUserAgent: bool, loggingEnabled: bool, underAttack: bool, trustReferrer: bool, cookieWhitelistUas: string, statusCode: int}
      */
     private function getSettingsData(): array
     {
@@ -105,6 +119,7 @@ class BotGuardDecider
             'blockEmptyUserAgent' => true,
             'loggingEnabled' => true,
             'underAttack' => false,
+            'trustReferrer' => false,
             'cookieWhitelistUas' => '',
             'statusCode' => 403,
         ];
@@ -125,9 +140,9 @@ class BotGuardDecider
     }
 
     /**
-     * @param array{enabled: bool, blockEmptyUserAgent: bool, loggingEnabled: bool, underAttack: bool, cookieWhitelistUas: string, statusCode: int} $defaults
+     * @param array{enabled: bool, blockEmptyUserAgent: bool, loggingEnabled: bool, underAttack: bool, trustReferrer: bool, cookieWhitelistUas: string, statusCode: int} $defaults
      *
-     * @return array{enabled: bool, blockEmptyUserAgent: bool, loggingEnabled: bool, underAttack: bool, cookieWhitelistUas: string, statusCode: int}
+     * @return array{enabled: bool, blockEmptyUserAgent: bool, loggingEnabled: bool, underAttack: bool, trustReferrer: bool, cookieWhitelistUas: string, statusCode: int}
      */
     private function loadSettingsDataFromDatabase(array $defaults): array
     {
@@ -143,6 +158,7 @@ class BotGuardDecider
             'blockEmptyUserAgent' => $settings->isBlockEmptyUserAgent(),
             'loggingEnabled' => $settings->isLoggingEnabled(),
             'underAttack' => $settings->isUnderAttack(),
+            'trustReferrer' => $settings->isTrustReferrer(),
             'cookieWhitelistUas' => (string) $settings->getCookieWhitelistUserAgents(),
             'statusCode' => $settings->getBlockStatusCode(),
         ];
@@ -305,6 +321,21 @@ class BotGuardDecider
         }
 
         return false;
+    }
+
+    private function hasExternalReferrer(Request $request): bool
+    {
+        $referrer = trim((string) $request->headers->get('referer', ''));
+        if ('' === $referrer) {
+            return false;
+        }
+
+        $referrerHost = parse_url($referrer, PHP_URL_HOST);
+        if (!is_string($referrerHost) || '' === trim($referrerHost)) {
+            return false;
+        }
+
+        return 0 !== strcasecmp($request->getHost(), $referrerHost);
     }
 
     private function hasAccessCookie(Request $request): bool

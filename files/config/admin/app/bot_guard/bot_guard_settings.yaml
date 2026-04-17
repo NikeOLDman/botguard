@@ -10,6 +10,7 @@ sortable_fields:
   enabled: enabled
   blockEmptyUserAgent: blockEmptyUserAgent
   loggingEnabled: loggingEnabled
+  trustReferrer: trustReferrer
   underAttack: underAttack
   cookieWhitelistUserAgents: cookieWhitelistUserAgents
   blockStatusCode: blockStatusCode
@@ -24,13 +25,16 @@ view:
       enabled:
         size: xl
         type: checkbox
+      underAttack:
+        size: xl
+        type: checkbox
       blockEmptyUserAgent:
         size: xl
         type: checkbox
       loggingEnabled:
         size: xl
         type: checkbox
-      underAttack:
+      trustReferrer:
         size: xl
         type: checkbox
       blockStatusCode:
@@ -54,6 +58,8 @@ form:
         compare_strict: false
       underAttack:
         compare_strict: false
+      trustReferrer:
+        compare_strict: false
       blockStatusCode:
       cookieWhitelistUserAgents:
       retentionDays:
@@ -63,6 +69,7 @@ form:
       blockEmptyUserAgent: ~
       loggingEnabled: ~
       underAttack: ~
+      trustReferrer: ~
       blockStatusCode: ~
       cookieWhitelistUserAgents: ~
       retentionDays: ~
@@ -72,6 +79,7 @@ form:
       blockEmptyUserAgent: ~
       loggingEnabled: ~
       underAttack: ~
+      trustReferrer: ~
       blockStatusCode: ~
       cookieWhitelistUserAgents:
         type: Symfony\Component\Form\Extension\Core\Type\TextareaType

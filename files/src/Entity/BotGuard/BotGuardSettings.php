@@ -64,6 +64,16 @@ class BotGuardSettings
     private $cookieWhitelistUserAgents;
 
     /**
+     * Разрешает пропуск cookie-челленджа для внешнего referrer:
+     * cookie ставится сразу в текущем ответе без редиректа.
+     *
+     * @var bool
+     *
+     * @ORM\Column(type="boolean")
+     */
+    private $trustReferrer = false;
+
+    /**
      * @var int
      *
      * @ORM\Column(type="integer")
@@ -161,6 +171,18 @@ class BotGuardSettings
     public function setCookieWhitelistUserAgents(?string $cookieWhitelistUserAgents): self
     {
         $this->cookieWhitelistUserAgents = $cookieWhitelistUserAgents;
+
+        return $this;
+    }
+
+    public function isTrustReferrer(): bool
+    {
+        return $this->trustReferrer;
+    }
+
+    public function setTrustReferrer(bool $trustReferrer): self
+    {
+        $this->trustReferrer = $trustReferrer;
 
         return $this;
     }
