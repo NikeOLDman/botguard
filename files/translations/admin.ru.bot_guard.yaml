@@ -44,6 +44,8 @@ bot_guard_settings:
         enabled: Защита включена
         block_empty_user_agent: Блокировать пустой User-Agent
         logging_enabled: Вести журнал блокировок
+        under_attack: Под атакой (cookie-проверка для всех страниц)
+        cookie_whitelist_user_agents: Белый список User-Agent для обхода cookie-проверки
         block_status_code: Код ответа при блокировке
         retention_days: Хранить логи (дней)
         updated_at: Обновлено
@@ -75,4 +77,5 @@ bot_guard_rule:
         user_agent_regex: User-Agent по регулярному выражению
         ip_exact: Точный IP
         uri_contains: URI содержит
+        cookie_required: Cookie-проверка для пути
 

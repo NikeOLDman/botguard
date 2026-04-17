@@ -1,0 +1,4 @@
+services:
+    App\Command\BotGuardCollectMetricsCommand:
+        tags:
+            - { name: 'console.command', command: 'app:bot-guard:collect-metrics' }

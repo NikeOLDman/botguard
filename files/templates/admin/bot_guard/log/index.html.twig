@@ -7,6 +7,17 @@
         {% set maxDaily = day.count %}
     {% endif %}
 {% endfor %}
+{% set currentCpuPercent = stats.systemCurrent.cpuPercent is not null ? stats.systemCurrent.cpuPercent : 0 %}
+{% set currentMem = stats.systemCurrent.memUsedPercent is not null ? stats.systemCurrent.memUsedPercent : 0 %}
+{% set cpuLevel = currentCpuPercent >= 85 ? 'danger' : (currentCpuPercent >= 65 ? 'warn' : 'info') %}
+{% set memLevel = currentMem >= 85 ? 'danger' : (currentMem >= 65 ? 'warn' : 'info') %}
+{% set cpuGaugePercent = currentCpuPercent %}
+{% if cpuGaugePercent > 100 %}{% set cpuGaugePercent = 100 %}{% endif %}
+{% if cpuGaugePercent < 0 %}{% set cpuGaugePercent = 0 %}{% endif %}
+{% set memGaugePercent = currentMem %}
+{% if memGaugePercent > 100 %}{% set memGaugePercent = 100 %}{% endif %}
+{% if memGaugePercent < 0 %}{% set memGaugePercent = 0 %}{% endif %}
+{% set peakSeverity = (stats.peaksLastHour.cpuLevel == 'danger' or stats.peaksLastHour.memLevel == 'danger') ? 'danger' : ((stats.peaksLastHour.cpuLevel == 'warn' or stats.peaksLastHour.memLevel == 'warn') ? 'warn' : 'info') %}
 
 {% block content %}
     <style>
@@ -18,11 +29,51 @@
         .bot-guard-chart{background:#fff;border:1px solid #e6ebf2;border-radius:10px;padding:14px;margin-bottom:16px}
         .bot-guard-bars{display:flex;gap:6px}
         .bot-guard-bar-wrap{flex:1;min-width:10px;position:relative}
-        .bot-guard-bar-area{height:140px;display:flex;align-items:flex-end;position:relative}
-        .bot-guard-bar{width:100%;background:linear-gradient(180deg,#63a5ff,#2563eb);border-radius:6px 6px 0 0;min-height:2px}
+        .bot-guard-bar-area{height:140px;display:flex;align-items:flex-end;position:relative;gap:2px}
+        .bot-guard-bar{width:100%;border-radius:6px 6px 0 0;min-height:2px}
+        .bot-guard-bar--info{background:linear-gradient(180deg,#7dd3fc,#38bdf8)}
+        .bot-guard-bar--warn{background:linear-gradient(180deg,#fcd34d,#f59e0b)}
+        .bot-guard-bar--danger{background:linear-gradient(180deg,#fca5a5,#ef4444)}
         .bot-guard-bar-value{position:absolute;left:50%;transform:translateX(-50%);font-size:10px;color:#475569;line-height:1;background:#fff;padding:1px 3px;border-radius:4px;pointer-events:none}
         .bot-guard-bar-date{margin-top:6px;font-size:10px;color:#6b7280;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .bot-guard-help{background:#f8fbff;border:1px solid #dbeafe;border-radius:10px;padding:12px 14px;margin-bottom:16px;color:#374151}
+        .bot-guard-help code{background:#eef2ff;padding:1px 5px;border-radius:4px}
+        .bot-guard-table{width:100%;border-collapse:collapse}
+        .bot-guard-table th,.bot-guard-table td{border-bottom:1px solid #e5e7eb;padding:8px 6px;font-size:12px;vertical-align:top}
+        .bot-guard-table th{text-align:left;color:#6b7280;font-weight:600}
+        .bot-guard-copy{cursor:pointer;color:#1d4ed8;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px}
+        .bot-guard-toplist{position:relative;display:inline-block}
+        .bot-guard-toplist__btn{font-size:11px;padding:2px 8px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:6px;color:#334155;cursor:pointer}
+        .bot-guard-toplist__menu{display:none;position:absolute;left:0;top:calc(100% + 6px);min-width:220px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 8px 20px rgba(15,23,42,.15);padding:8px;z-index:20}
+        .bot-guard-toplist:hover .bot-guard-toplist__menu,.bot-guard-toplist:focus-within .bot-guard-toplist__menu{display:block}
+        .bot-guard-toplist__menu ol{margin:0;padding:0 0 0 16px}
+        .bot-guard-toplist__menu li{font-size:12px;color:#334155;margin:3px 0}
+        .bot-guard-load-layout{display:grid;grid-template-columns:2fr 1fr;gap:16px;align-items:stretch}
+        .bot-guard-daily-load-bars{display:flex;gap:4px}
+        .bot-guard-daily-load{flex:1;min-width:10px}
+        .bot-guard-daily-load__area{height:170px;display:flex;align-items:flex-end;gap:2px}
+        .bot-guard-daily-load__bar{width:100%;border-radius:6px 6px 0 0;min-height:2px}
+        .bot-guard-donut-wrap{display:grid;grid-template-columns:1fr;gap:12px}
+        .bot-guard-donut-card{display:flex;align-items:center;gap:12px;padding:10px;border:1px solid #e2e8f0;border-radius:10px;background:#fbfdff}
+        .bot-guard-donut{--p:0%;width:90px;height:90px;border-radius:50%;position:relative;background:conic-gradient(#38bdf8 var(--p), #e5e7eb 0)}
+        .bot-guard-donut::after{content:"";position:absolute;inset:10px;border-radius:50%;background:#fff}
+        .bot-guard-donut__text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:1;font-size:14px;font-weight:700;color:#1f2937}
+        .bot-guard-donut--warn{background:conic-gradient(#f59e0b var(--p), #e5e7eb 0)}
+        .bot-guard-donut--danger{background:conic-gradient(#ef4444 var(--p), #e5e7eb 0)}
+        .bot-guard-level{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+        .bot-guard-level--info{background:#e0f2fe;color:#0369a1}
+        .bot-guard-level--warn{background:#fef3c7;color:#92400e}
+        .bot-guard-level--danger{background:#fee2e2;color:#991b1b}
+        .bot-guard-alert{border-radius:10px;padding:10px 12px;margin-bottom:16px;border:1px solid}
+        .bot-guard-alert--info{background:#f0f9ff;border-color:#bae6fd;color:#075985}
+        .bot-guard-alert--warn{background:#fffbeb;border-color:#fde68a;color:#92400e}
+        .bot-guard-alert--danger{background:#fef2f2;border-color:#fecaca;color:#991b1b}
+        .bot-guard-table-scroll{max-height:320px;overflow:auto;border:1px solid #e5e7eb;border-radius:8px}
     </style>
+
+    <div class="bot-guard-help">
+        Для графиков CPU/RAM включите cron <code>app:bot-guard:collect-metrics</code>.
+    </div>
 
     <div class="bot-guard-grid">
         <div class="bot-guard-card">
@@ -47,6 +98,20 @@
                 {{ stats.topRule ? stats.topRule.name : '—' }}
             </div>
             <div class="bot-guard-top">{{ stats.topRule ? stats.topRule.count ~ ' срабатываний' : 'Нет данных' }}</div>
+            <div class="bot-guard-toplist">
+                <button type="button" class="bot-guard-toplist__btn">Top-5</button>
+                <div class="bot-guard-toplist__menu">
+                    {% if stats.topRules is empty %}
+                        <div class="bot-guard-top">Нет данных</div>
+                    {% else %}
+                        <ol>
+                            {% for row in stats.topRules %}
+                                <li>{{ row.name }} — {{ row.count }}</li>
+                            {% endfor %}
+                        </ol>
+                    {% endif %}
+                </div>
+            </div>
         </div>
         <div class="bot-guard-card">
             <div class="bot-guard-card__label">Топ IP</div>
@@ -54,6 +119,24 @@
                 {{ stats.topIp ? stats.topIp.ip : '—' }}
             </div>
             <div class="bot-guard-top">{{ stats.topIp ? stats.topIp.count ~ ' запросов' : 'Нет данных' }}</div>
+            <div class="bot-guard-toplist">
+                <button type="button" class="bot-guard-toplist__btn">Top-5</button>
+                <div class="bot-guard-toplist__menu">
+                    {% if stats.topIps is empty %}
+                        <div class="bot-guard-top">Нет данных</div>
+                    {% else %}
+                        <ol>
+                            {% for row in stats.topIps %}
+                                <li>{{ row.ip }} — {{ row.count }}</li>
+                            {% endfor %}
+                        </ol>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="bot-guard-card">
+            <div class="bot-guard-card__label">Незаблокированная подозрительная активность</div>
+            <div class="bot-guard-card__value">{{ stats.suspiciousLast24h }}</div>
         </div>
     </div>
 
@@ -64,7 +147,7 @@
                 {% set h = ((day.count / maxDaily) * 100)|round(2) %}
                 <div class="bot-guard-bar-wrap" title="{{ day.day }}: {{ day.count }}">
                     <div class="bot-guard-bar-area">
-                        <div class="bot-guard-bar" style="height: {{ h }}%;"></div>
+                        <div class="bot-guard-bar bot-guard-bar--info" style="height: {{ h }}%;"></div>
                         <div class="bot-guard-bar-value" style="bottom: calc({{ h }}% + 4px);">{{ day.count }}</div>
                     </div>
                     <div class="bot-guard-bar-date">{{ day.day|slice(8, 2) }}.{{ day.day|slice(5, 2) }}</div>
@@ -72,6 +155,154 @@
             {% endfor %}
         </div>
     </div>
+
+    <div class="bot-guard-alert bot-guard-alert--{{ peakSeverity }}">
+        <b>Пики за последний час:</b>
+        CPU max:
+        {{ stats.peaksLastHour.maxCpuPercent is not null ? stats.peaksLastHour.maxCpuPercent|number_format(2, '.', ' ') ~ '%' : 'n/a' }}
+        (LA1: {{ stats.peaksLastHour.maxLoad1 is not null ? stats.peaksLastHour.maxLoad1|number_format(3, '.', ' ') : 'n/a' }})
+        <span class="bot-guard-level bot-guard-level--{{ stats.peaksLastHour.cpuLevel }}">{{ stats.peaksLastHour.cpuLevel == 'danger' ? 'красный' : (stats.peaksLastHour.cpuLevel == 'warn' ? 'жёлтый' : 'голубой') }}</span>
+        &nbsp;|&nbsp;
+        RAM max:
+        {{ stats.peaksLastHour.maxMemUsedPercent is not null ? stats.peaksLastHour.maxMemUsedPercent|number_format(2, '.', ' ') ~ '%' : 'n/a' }}
+        <span class="bot-guard-level bot-guard-level--{{ stats.peaksLastHour.memLevel }}">{{ stats.peaksLastHour.memLevel == 'danger' ? 'красный' : (stats.peaksLastHour.memLevel == 'warn' ? 'жёлтый' : 'голубой') }}</span>
+        &nbsp;|&nbsp;
+        Блокировок: {{ stats.peaksLastHour.blocked }}, подозрительных незаблокированных: {{ stats.peaksLastHour.suspicious }}
+    </div>
+
+    <div class="bot-guard-chart">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;">Нагрузка: средняя за 14 дней + текущая (шкала 0-100%)</div>
+        <div class="bot-guard-load-layout">
+            <div>
+                <div class="bot-guard-top" style="margin-bottom:8px;">Средняя нагрузка за 14 дней: CPU% и RAM% (слева)</div>
+                <div class="bot-guard-daily-load-bars">
+                    {% for point in stats.systemDaily %}
+                        {% set loadPercent = point.cpuPercent is null ? 0 : point.cpuPercent %}
+                        {% set mem = point.memUsedPercent is null ? 0 : point.memUsedPercent %}
+                        {% set hLoad = loadPercent %}
+                        {% set hMem = mem %}
+                        {% set dailyCpuLevel = loadPercent >= 85 ? 'danger' : (loadPercent >= 65 ? 'warn' : 'info') %}
+                        {% set dailyMemLevel = mem >= 85 ? 'danger' : (mem >= 65 ? 'warn' : 'info') %}
+                        <div class="bot-guard-daily-load" title="{{ point.day }} / avg CPU: {{ point.cpuPercent is not null ? point.cpuPercent|number_format(2, '.', ' ') ~ '%' : 'n/a' }} (LA1: {{ point.load1 is not null ? point.load1|number_format(3, '.', ' ') : 'n/a' }}), avg RAM: {{ point.memUsedPercent is not null ? point.memUsedPercent|number_format(2, '.', ' ') ~ '%' : 'n/a' }}">
+                            <div class="bot-guard-daily-load__area">
+                                <div class="bot-guard-daily-load__bar bot-guard-bar--{{ dailyCpuLevel }}" style="height: {{ hLoad }}%;"></div>
+                                <div class="bot-guard-daily-load__bar bot-guard-bar--{{ dailyMemLevel }}" style="height: {{ hMem }}%;"></div>
+                            </div>
+                            <div class="bot-guard-bar-date">{{ point.day|slice(8, 2) }}.{{ point.day|slice(5, 2) }}</div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div>
+                <div class="bot-guard-top" style="margin-bottom:8px;">Текущая нагрузка</div>
+                <div class="bot-guard-donut-wrap">
+                    <div class="bot-guard-donut-card">
+                        <div class="bot-guard-donut bot-guard-donut--{{ cpuLevel }}" style="--p: {{ cpuGaugePercent }}%;">
+                            <div class="bot-guard-donut__text">{{ stats.systemCurrent.cpuPercent is not null ? stats.systemCurrent.cpuPercent|number_format(1, '.', ' ') ~ '%' : 'n/a' }}</div>
+                        </div>
+                        <div>
+                            <div class="bot-guard-card__label">CPU</div>
+                            <div class="bot-guard-top">
+                                LA1: {{ stats.systemCurrent.load1 is not null ? stats.systemCurrent.load1|number_format(3, '.', ' ') : 'n/a' }},
+                                LA5: {{ stats.systemCurrent.load5 is not null ? stats.systemCurrent.load5|number_format(3, '.', ' ') : 'n/a' }},
+                                LA15: {{ stats.systemCurrent.load15 is not null ? stats.systemCurrent.load15|number_format(3, '.', ' ') : 'n/a' }}
+                            </div>
+                            <div class="bot-guard-top">Нормализовано по ядрам: {{ stats.systemCurrent.cpuCores is not null ? stats.systemCurrent.cpuCores : 'n/a' }}</div>
+                            <div class="bot-guard-level bot-guard-level--{{ cpuLevel }}">{{ cpuLevel == 'danger' ? 'красный порог' : (cpuLevel == 'warn' ? 'жёлтый порог' : 'голубой порог') }}</div>
+                        </div>
+                    </div>
+                    <div class="bot-guard-donut-card">
+                        <div class="bot-guard-donut bot-guard-donut--{{ memLevel }}" style="--p: {{ memGaugePercent }}%;">
+                            <div class="bot-guard-donut__text">{{ stats.systemCurrent.memUsedPercent is not null ? stats.systemCurrent.memUsedPercent|number_format(1, '.', ' ') ~ '%' : 'n/a' }}</div>
+                        </div>
+                        <div>
+                            <div class="bot-guard-card__label">RAM</div>
+                            <div class="bot-guard-top">Последний срез: {{ stats.systemCurrent.sampledAt ?: 'n/a' }}</div>
+                            <div class="bot-guard-level bot-guard-level--{{ memLevel }}">{{ memLevel == 'danger' ? 'красный порог' : (memLevel == 'warn' ? 'жёлтый порог' : 'голубой порог') }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bot-guard-chart">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;">Подозрительная активность (не заблокировано, 24ч)</div>
+        {% if stats.suspiciousTop is empty %}
+            <div class="bot-guard-top">Подозрительные незаблокированные события пока не обнаружены.</div>
+        {% else %}
+            <div class="bot-guard-table-scroll">
+                <table class="bot-guard-table">
+                    <thead>
+                    <tr>
+                        <th>IP</th>
+                        <th>User-Agent</th>
+                        <th>Причина</th>
+                        <th>Событий</th>
+                        <th>Последнее</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for row in stats.suspiciousTop %}
+                        <tr>
+                            <td>
+                                {% if row.ip %}
+                                    <span class="bot-guard-copy" data-copy="{{ row.ip }}">{{ row.ip }}</span>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if row.userAgent %}
+                                    <span class="bot-guard-copy" data-copy="{{ row.userAgent }}">{{ row.userAgent }}</span>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>{{ row.reason }}</td>
+                            <td>{{ row.count }}</td>
+                            <td>{{ row.lastSeen }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+    </div>
+
+    <script>
+        (function () {
+            document.addEventListener('click', function (event) {
+                var target = event.target;
+
+                if (!target.classList.contains('bot-guard-copy')) {
+                    return;
+                }
+
+                var value = target.getAttribute('data-copy') || '';
+                if (!value) {
+                    return;
+                }
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(value);
+                } else {
+                    var input = document.createElement('textarea');
+                    input.value = value;
+                    document.body.appendChild(input);
+                    input.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(input);
+                }
+
+                var oldText = target.textContent;
+                target.textContent = 'Скопировано';
+                setTimeout(function () {
+                    target.textContent = oldText;
+                }, 1200);
+            });
+        })();
+    </script>
 
     {{ parent() }}
 {% endblock %}

@@ -57,6 +57,7 @@ form:
             bot_guard_rule.type.user_agent_regex: user_agent_regex
             bot_guard_rule.type.ip_exact: ip_exact
             bot_guard_rule.type.uri_contains: uri_contains
+            bot_guard_rule.type.cookie_required: cookie_required
       name:
       pattern:
       uriPattern:
@@ -73,6 +74,7 @@ form:
             bot_guard_rule.type.user_agent_regex: user_agent_regex
             bot_guard_rule.type.ip_exact: ip_exact
             bot_guard_rule.type.uri_contains: uri_contains
+            bot_guard_rule.type.cookie_required: cookie_required
       pattern: ~
       uriPattern:
         options:
@@ -92,6 +94,7 @@ form:
             bot_guard_rule.type.user_agent_regex: user_agent_regex
             bot_guard_rule.type.ip_exact: ip_exact
             bot_guard_rule.type.uri_contains: uri_contains
+            bot_guard_rule.type.cookie_required: cookie_required
       pattern: ~
       uriPattern:
         options:

@@ -23,9 +23,16 @@ class BotGuardAdminController extends AbstractController
     {
         $daysFromQuery = (int) $request->query->get('days', 0);
         $days = $daysFromQuery > 0 ? $daysFromQuery : $this->resolveRetentionDays($em);
-        $deleted = $cleaner->cleanupOlderThanDays($days);
+        $deleted = $cleaner->cleanupAllOlderThanDays($days);
 
-        $this->addFlash('success', sprintf('Очистка Bot Guard выполнена. Удалено записей: %d. Период хранения: %d дней.', $deleted, $days));
+        $this->addFlash('success', sprintf(
+            'Очистка Bot Guard выполнена. Удалено записей: всего=%d, блокировок=%d, подозрительных=%d, метрик=%d. Период хранения: %d дней.',
+            $deleted['total'],
+            $deleted['bot_guard_log'],
+            $deleted['bot_guard_suspicious_event'],
+            $deleted['bot_guard_system_metric'],
+            $days
+        ));
 
         $referer = (string) $request->headers->get('referer', '');
 

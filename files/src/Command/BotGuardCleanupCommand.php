@@ -45,9 +45,16 @@ class BotGuardCleanupCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
         $days = $this->resolveDays($input->getOption('days'));
-        $deleted = $this->cleaner->cleanupOlderThanDays($days);
+        $deleted = $this->cleaner->cleanupAllOlderThanDays($days);
 
-        $io->success(sprintf('Bot Guard cleanup completed. Deleted rows: %d. Retention: %d days.', $deleted, $days));
+        $io->success(sprintf(
+            'Bot Guard cleanup completed. Deleted rows: total=%d, blocked=%d, suspicious=%d, metrics=%d. Retention: %d days.',
+            $deleted['total'],
+            $deleted['bot_guard_log'],
+            $deleted['bot_guard_suspicious_event'],
+            $deleted['bot_guard_system_metric'],
+            $days
+        ));
 
         return Command::SUCCESS;
     }

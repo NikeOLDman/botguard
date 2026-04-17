@@ -17,6 +17,7 @@ class BotGuardRule
     public const TYPE_USER_AGENT_REGEX = 'user_agent_regex';
     public const TYPE_IP_EXACT = 'ip_exact';
     public const TYPE_URI_CONTAINS = 'uri_contains';
+    public const TYPE_COOKIE_REQUIRED = 'cookie_required';
 
     /**
      * @var int|null

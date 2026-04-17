@@ -10,6 +10,8 @@ sortable_fields:
   enabled: enabled
   blockEmptyUserAgent: blockEmptyUserAgent
   loggingEnabled: loggingEnabled
+  underAttack: underAttack
+  cookieWhitelistUserAgents: cookieWhitelistUserAgents
   blockStatusCode: blockStatusCode
   retentionDays: retentionDays
   updatedAt: updatedAt
@@ -28,8 +30,13 @@ view:
       loggingEnabled:
         size: xl
         type: checkbox
+      underAttack:
+        size: xl
+        type: checkbox
       blockStatusCode:
         size: xl
+      cookieWhitelistUserAgents:
+        size: xxxl
       retentionDays:
         size: xl
       updatedAt:
@@ -45,21 +52,34 @@ form:
         compare_strict: false
       loggingEnabled:
         compare_strict: false
+      underAttack:
+        compare_strict: false
       blockStatusCode:
+      cookieWhitelistUserAgents:
       retentionDays:
   index:
     fields:
       enabled: ~
       blockEmptyUserAgent: ~
       loggingEnabled: ~
+      underAttack: ~
       blockStatusCode: ~
+      cookieWhitelistUserAgents: ~
       retentionDays: ~
   edit:
     fields:
       enabled: ~
       blockEmptyUserAgent: ~
       loggingEnabled: ~
+      underAttack: ~
       blockStatusCode: ~
+      cookieWhitelistUserAgents:
+        type: Symfony\Component\Form\Extension\Core\Type\TextareaType
+        options:
+          required: false
+          attr:
+            rows: 4
+            placeholder: "YandexBot\nGooglebot\nbingbot"
       retentionDays:
         options:
           attr:

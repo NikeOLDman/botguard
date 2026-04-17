@@ -44,6 +44,26 @@ class BotGuardSettings
     private $loggingEnabled = true;
 
     /**
+     * Включает обязательную cookie-проверку для всех страниц сайта.
+     *
+     * @var bool
+     *
+     * @ORM\Column(type="boolean")
+     */
+    private $underAttack = false;
+
+    /**
+     * Белый список User-Agent для обхода cookie-проверки.
+     * Значения разделяются переносом строки или запятой.
+     * Не применяется в режиме "Под атакой".
+     *
+     * @var string|null
+     *
+     * @ORM\Column(type="text", nullable=true)
+     */
+    private $cookieWhitelistUserAgents;
+
+    /**
      * @var int
      *
      * @ORM\Column(type="integer")
@@ -117,6 +137,30 @@ class BotGuardSettings
     public function setLoggingEnabled(bool $loggingEnabled): self
     {
         $this->loggingEnabled = $loggingEnabled;
+
+        return $this;
+    }
+
+    public function isUnderAttack(): bool
+    {
+        return $this->underAttack;
+    }
+
+    public function setUnderAttack(bool $underAttack): self
+    {
+        $this->underAttack = $underAttack;
+
+        return $this;
+    }
+
+    public function getCookieWhitelistUserAgents(): ?string
+    {
+        return $this->cookieWhitelistUserAgents;
+    }
+
+    public function setCookieWhitelistUserAgents(?string $cookieWhitelistUserAgents): self
+    {
+        $this->cookieWhitelistUserAgents = $cookieWhitelistUserAgents;
 
         return $this;
     }
