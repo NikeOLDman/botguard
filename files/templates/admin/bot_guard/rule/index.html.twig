@@ -2,12 +2,44 @@
 
 {% block content %}
     <style>
+        .bot-guard-transfer{background:#f8fbff;border:1px solid #dbeafe;border-radius:10px;padding:12px 14px;margin-bottom:16px}
+        .bot-guard-transfer__title{font-weight:700;color:#1f2937;margin-bottom:8px}
+        .bot-guard-transfer__desc{color:#334155;font-size:13px;line-height:1.45;margin-bottom:12px}
+        .bot-guard-transfer__desc ul{margin:8px 0 0 18px;padding:0}
+        .bot-guard-transfer__desc li{margin:4px 0}
+        .bot-guard-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+        .bot-guard-actions__import{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+        .bot-guard-btn{display:inline-flex;align-items:center;justify-content:center;padding:8px 14px;border-radius:8px;border:1px solid transparent;font-weight:600;font-size:13px;line-height:1.2;text-decoration:none;cursor:pointer;transition:all .15s ease}
+        .bot-guard-btn--export{background:#ffffff;color:#1d4ed8;border-color:#93c5fd}
+        .bot-guard-btn--export:hover{background:#eff6ff;color:#1e40af}
+        .bot-guard-btn--import{background:#1d4ed8;color:#ffffff;border-color:#1d4ed8}
+        .bot-guard-btn--import:hover{background:#1e40af;border-color:#1e40af}
+        .bot-guard-actions input[type=file]{max-width:340px;background:#ffffff;border:1px solid #cbd5e1;border-radius:8px;padding:6px 8px;color:#1f2937;font-size:13px}
         .bot-guard-hint{background:#f8fbff;border:1px solid #dbeafe;border-radius:10px;padding:12px 14px;margin-bottom:16px;color:#374151}
         .bot-guard-hint b{color:#1f2937}
         .bot-guard-hint ul{margin:8px 0 0 18px;padding:0}
         .bot-guard-hint li{margin:4px 0}
         .bot-guard-hint code{background:#eef2ff;padding:1px 5px;border-radius:4px}
     </style>
+    <div class="bot-guard-transfer">
+        <div class="bot-guard-transfer__title">Импорт и экспорт правил BotGuard</div>
+        <div class="bot-guard-transfer__desc">
+            Экспорт формирует JSON-файл со всеми правилами (для переноса на другой сайт). Импорт <b>полностью заменяет</b> текущий набор правил из файла.
+            <ul>
+                <li>Перед записью выполняется строгая валидация структуры, типов и значений.</li>
+                <li>Импорт выполняется в транзакции: при любой ошибке база откатывается к предыдущему состоянию.</li>
+                <li>Файл ограничен по размеру и защищён CSRF-токеном.</li>
+            </ul>
+        </div>
+        <div class="bot-guard-actions">
+            <a class="bot-guard-btn bot-guard-btn--export" href="{{ path('app_admin_bot_guard_rule_export') }}">Экспорт правил</a>
+            <form class="bot-guard-actions__import" method="post" action="{{ path('app_admin_bot_guard_rule_import') }}" enctype="multipart/form-data">
+                <input type="hidden" name="_token" value="{{ csrf_token('bot_guard_rule_import') }}">
+                <input type="file" name="rules_file" accept=".json,application/json" required>
+                <button type="submit" class="bot-guard-btn bot-guard-btn--import">Импорт правил</button>
+            </form>
+        </div>
+    </div>
     <div class="bot-guard-hint">
         <b>Памятка по типам правил:</b> сначала срабатывают правила с меньшим <b>priority</b>.
         <ul>
