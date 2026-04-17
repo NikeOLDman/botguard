@@ -51,7 +51,7 @@
         .bot-guard-load-layout{display:grid;grid-template-columns:2fr 1fr;gap:16px;align-items:stretch}
         .bot-guard-daily-load-bars{display:flex;gap:4px}
         .bot-guard-daily-load{flex:1;min-width:10px}
-        .bot-guard-daily-load__area{height:170px;display:flex;align-items:flex-end;gap:2px}
+        .bot-guard-daily-load__area{height:215px;display:flex;align-items:flex-end;gap:2px}
         .bot-guard-daily-load__bar{width:100%;border-radius:6px 6px 0 0;min-height:2px}
         .bot-guard-donut-wrap{display:grid;grid-template-columns:1fr;gap:12px}
         .bot-guard-donut-card{display:flex;align-items:center;gap:12px;padding:10px;border:1px solid #e2e8f0;border-radius:10px;background:#fbfdff}
@@ -157,15 +157,15 @@
     </div>
 
     <div class="bot-guard-alert bot-guard-alert--{{ peakSeverity }}">
-        <b>Пики за последний час:</b>
+        <b>Пиковая нагрузка за последний час:</b><br/>
         CPU max:
         {{ stats.peaksLastHour.maxCpuPercent is not null ? stats.peaksLastHour.maxCpuPercent|number_format(2, '.', ' ') ~ '%' : 'n/a' }}
         (LA1: {{ stats.peaksLastHour.maxLoad1 is not null ? stats.peaksLastHour.maxLoad1|number_format(3, '.', ' ') : 'n/a' }})
-        <span class="bot-guard-level bot-guard-level--{{ stats.peaksLastHour.cpuLevel }}">{{ stats.peaksLastHour.cpuLevel == 'danger' ? 'красный' : (stats.peaksLastHour.cpuLevel == 'warn' ? 'жёлтый' : 'голубой') }}</span>
+        <span class="bot-guard-level bot-guard-level--{{ stats.peaksLastHour.cpuLevel }}">{{ stats.peaksLastHour.cpuLevel == 'danger' ? 'критичное' : (stats.peaksLastHour.cpuLevel == 'warn' ? 'повышенная' : 'нормальная') }}</span>
         &nbsp;|&nbsp;
         RAM max:
         {{ stats.peaksLastHour.maxMemUsedPercent is not null ? stats.peaksLastHour.maxMemUsedPercent|number_format(2, '.', ' ') ~ '%' : 'n/a' }}
-        <span class="bot-guard-level bot-guard-level--{{ stats.peaksLastHour.memLevel }}">{{ stats.peaksLastHour.memLevel == 'danger' ? 'красный' : (stats.peaksLastHour.memLevel == 'warn' ? 'жёлтый' : 'голубой') }}</span>
+        <span class="bot-guard-level bot-guard-level--{{ stats.peaksLastHour.memLevel }}">{{ stats.peaksLastHour.memLevel == 'danger' ? 'критичное' : (stats.peaksLastHour.memLevel == 'warn' ? 'повышенная' : 'нормальная') }}</span>
         &nbsp;|&nbsp;
         Блокировок: {{ stats.peaksLastHour.blocked }}, подозрительных незаблокированных: {{ stats.peaksLastHour.suspicious }}
     </div>
@@ -174,7 +174,7 @@
         <div style="font-size:13px;font-weight:600;margin-bottom:10px;">Нагрузка: средняя за 14 дней + текущая (шкала 0-100%)</div>
         <div class="bot-guard-load-layout">
             <div>
-                <div class="bot-guard-top" style="margin-bottom:8px;">Средняя нагрузка за 14 дней: CPU% и RAM% (слева)</div>
+                <div class="bot-guard-top" style="margin-bottom:8px;">Средняя нагрузка за 14 дней: CPU% и RAM%</div>
                 <div class="bot-guard-daily-load-bars">
                     {% for point in stats.systemDaily %}
                         {% set loadPercent = point.cpuPercent is null ? 0 : point.cpuPercent %}
@@ -194,21 +194,21 @@
                 </div>
             </div>
             <div>
-                <div class="bot-guard-top" style="margin-bottom:8px;">Текущая нагрузка</div>
+                <div class="bot-guard-top" style="margin-bottom:8px;">Текущая нагрузка (Последняя проверка: {{ stats.systemCurrent.sampledAt ?: 'n/a' }})</div>
                 <div class="bot-guard-donut-wrap">
                     <div class="bot-guard-donut-card">
                         <div class="bot-guard-donut bot-guard-donut--{{ cpuLevel }}" style="--p: {{ cpuGaugePercent }}%;">
                             <div class="bot-guard-donut__text">{{ stats.systemCurrent.cpuPercent is not null ? stats.systemCurrent.cpuPercent|number_format(1, '.', ' ') ~ '%' : 'n/a' }}</div>
                         </div>
                         <div>
-                            <div class="bot-guard-card__label">CPU</div>
-                            <div class="bot-guard-top">
-                                LA1: {{ stats.systemCurrent.load1 is not null ? stats.systemCurrent.load1|number_format(3, '.', ' ') : 'n/a' }},
-                                LA5: {{ stats.systemCurrent.load5 is not null ? stats.systemCurrent.load5|number_format(3, '.', ' ') : 'n/a' }},
-                                LA15: {{ stats.systemCurrent.load15 is not null ? stats.systemCurrent.load15|number_format(3, '.', ' ') : 'n/a' }}
-                            </div>
+                            <div class="bot-guard-card__label">Процессор</div>
+{#                            <div class="bot-guard-top">#}
+{#                                LA1: {{ stats.systemCurrent.load1 is not null ? stats.systemCurrent.load1|number_format(3, '.', ' ') : 'n/a' }},#}
+{#                                LA5: {{ stats.systemCurrent.load5 is not null ? stats.systemCurrent.load5|number_format(3, '.', ' ') : 'n/a' }},#}
+{#                                LA15: {{ stats.systemCurrent.load15 is not null ? stats.systemCurrent.load15|number_format(3, '.', ' ') : 'n/a' }}#}
+{#                            </div>#}
                             <div class="bot-guard-top">Нормализовано по ядрам: {{ stats.systemCurrent.cpuCores is not null ? stats.systemCurrent.cpuCores : 'n/a' }}</div>
-                            <div class="bot-guard-level bot-guard-level--{{ cpuLevel }}">{{ cpuLevel == 'danger' ? 'красный порог' : (cpuLevel == 'warn' ? 'жёлтый порог' : 'голубой порог') }}</div>
+                            <div class="bot-guard-level bot-guard-level--{{ cpuLevel }}">{{ cpuLevel == 'danger' ? 'критичная нагрузка на CPU' : (cpuLevel == 'warn' ? 'повышенная нагрузка на CPU' : 'нормальная нагрузка на CPU') }}</div>
                         </div>
                     </div>
                     <div class="bot-guard-donut-card">
@@ -216,9 +216,9 @@
                             <div class="bot-guard-donut__text">{{ stats.systemCurrent.memUsedPercent is not null ? stats.systemCurrent.memUsedPercent|number_format(1, '.', ' ') ~ '%' : 'n/a' }}</div>
                         </div>
                         <div>
-                            <div class="bot-guard-card__label">RAM</div>
-                            <div class="bot-guard-top">Последний срез: {{ stats.systemCurrent.sampledAt ?: 'n/a' }}</div>
-                            <div class="bot-guard-level bot-guard-level--{{ memLevel }}">{{ memLevel == 'danger' ? 'красный порог' : (memLevel == 'warn' ? 'жёлтый порог' : 'голубой порог') }}</div>
+                            <div class="bot-guard-card__label">Оперативная память</div>
+{#                            <div class="bot-guard-top">Последняя проверка: {{ stats.systemCurrent.sampledAt ?: 'n/a' }}</div>#}
+                            <div class="bot-guard-level bot-guard-level--{{ memLevel }}">{{ memLevel == 'danger' ? 'критичное использование RAM' : (memLevel == 'warn' ? 'повышенное использование RAM' : 'нормальное использование RAM') }}</div>
                         </div>
                     </div>
                 </div>
