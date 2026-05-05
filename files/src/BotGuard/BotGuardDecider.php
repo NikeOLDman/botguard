@@ -14,6 +14,7 @@ use Symfony\Contracts\Cache\ItemInterface;
 class BotGuardDecider
 {
     public const ACCESS_COOKIE_NAME = 'bot_guard_access';
+    public const JS_COOKIE_NAME = 'bot_guard_js';
     public const CHALLENGE_QUERY_PARAM = '_bgc';
 
     private const CACHE_TTL_SECONDS = 15;
@@ -29,10 +30,15 @@ class BotGuardDecider
      * @var CacheInterface|null
      */
     private $cache;
+    /**
+     * @var string
+     */
+    private $appSecret;
 
-    public function __construct(EntityManagerInterface $em, ?CacheInterface $cache = null)
+    public function __construct(EntityManagerInterface $em, string $appSecret, ?CacheInterface $cache = null)
     {
         $this->em = $em;
+        $this->appSecret = $appSecret;
         $this->cache = $cache;
     }
 
@@ -71,13 +77,21 @@ class BotGuardDecider
         }
 
         if ($this->requiresCookieValidation($settings, $userAgent, $cookieRulesMatched)) {
-            if (!$this->hasAccessCookie($request)) {
+            if (!$this->hasValidAccessCookie($request)) {
                 if ($this->isChallengeRetry($request)) {
                     return $this->deny('cookie_not_set', null, null, $statusCode);
                 }
 
                 return $this->challenge('cookie_required', $statusCode);
             }
+        }
+
+        if (!empty($settings['underAttack']) && !$this->hasValidJsChallengeCookie($request)) {
+            if ($this->isChallengeRetry($request)) {
+                return $this->deny('js_challenge_not_passed', null, null, $statusCode);
+            }
+
+            return $this->challenge('js_challenge_required', $statusCode);
         }
 
         return $this->allow($statusCode);
@@ -107,6 +121,105 @@ class BotGuardDecider
         }
 
         return $this->hasExternalReferrer($request);
+    }
+
+    public function isUnderAttackEnabled(): bool
+    {
+        $settings = $this->getSettingsData();
+
+        return !empty($settings['underAttack']);
+    }
+
+    public function hasValidAccessCookie(Request $request): bool
+    {
+        $raw = trim((string) $request->cookies->get(self::ACCESS_COOKIE_NAME, ''));
+        if ('' === $raw) {
+            return false;
+        }
+
+        [$payload, $signature] = array_pad(explode('.', $raw, 2), 2, '');
+        if ('' === $payload || '' === $signature) {
+            return false;
+        }
+
+        $expected = hash_hmac('sha256', $payload, $this->appSecret);
+        if (!hash_equals($expected, $signature)) {
+            return false;
+        }
+
+        $decoded = json_decode((string) base64_decode(strtr($payload, '-_', '+/'), true), true);
+        if (!is_array($decoded)) {
+            return false;
+        }
+
+        $exp = isset($decoded['exp']) ? (int) $decoded['exp'] : 0;
+        if ($exp < time()) {
+            return false;
+        }
+
+        $uaHash = isset($decoded['ua']) ? (string) $decoded['ua'] : '';
+        if ('' === $uaHash) {
+            return false;
+        }
+
+        $actualUaHash = hash('sha256', mb_strtolower(trim((string) $request->headers->get('User-Agent', ''))));
+        if (!hash_equals($uaHash, $actualUaHash)) {
+            return false;
+        }
+
+        $ipHash = isset($decoded['ip']) ? (string) $decoded['ip'] : '';
+        if ('' === $ipHash) {
+            return false;
+        }
+
+        $actualIpHash = hash('sha256', $this->buildIpFingerprint((string) $request->getClientIp()));
+        if (!hash_equals($ipHash, $actualIpHash)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function hasValidJsChallengeCookie(Request $request): bool
+    {
+        return '1' === (string) $request->cookies->get(self::JS_COOKIE_NAME, '');
+    }
+
+    public function buildAccessCookieValue(Request $request): string
+    {
+        $expiresAt = time() + 3600 * 6;
+        $payload = [
+            'v' => 2,
+            'exp' => $expiresAt,
+            'ua' => hash('sha256', mb_strtolower(trim((string) $request->headers->get('User-Agent', '')))),
+            'ip' => hash('sha256', $this->buildIpFingerprint((string) $request->getClientIp())),
+            'rnd' => bin2hex(random_bytes(8)),
+        ];
+        $encoded = rtrim(strtr(base64_encode((string) json_encode($payload)), '+/', '-_'), '=');
+        $signature = hash_hmac('sha256', $encoded, $this->appSecret);
+
+        return $encoded.'.'.$signature;
+    }
+
+    private function buildIpFingerprint(string $ip): string
+    {
+        $ip = trim($ip);
+        if ('' === $ip) {
+            return 'no-ip';
+        }
+
+        if (false !== strpos($ip, ':')) {
+            $parts = explode(':', $ip);
+
+            return implode(':', array_slice($parts, 0, 4));
+        }
+
+        $parts = explode('.', $ip);
+        if (4 !== count($parts)) {
+            return $ip;
+        }
+
+        return $parts[0].'.'.$parts[1].'.'.$parts[2].'.0';
     }
 
     /**
@@ -340,7 +453,7 @@ class BotGuardDecider
 
     private function hasAccessCookie(Request $request): bool
     {
-        return '' !== trim((string) $request->cookies->get(self::ACCESS_COOKIE_NAME, ''));
+        return $this->hasValidAccessCookie($request);
     }
 
     private function isChallengeRetry(Request $request): bool
