@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Command;
 
+use App\BotGuard\BotGuardAutoUnderAttackManager;
 use Doctrine\DBAL\Connection;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -17,10 +18,16 @@ class BotGuardCollectMetricsCommand extends Command
      */
     private $connection;
 
-    public function __construct(Connection $connection)
+    /**
+     * @var BotGuardAutoUnderAttackManager
+     */
+    private $autoUnderAttackManager;
+
+    public function __construct(Connection $connection, BotGuardAutoUnderAttackManager $autoUnderAttackManager)
     {
         parent::__construct();
         $this->connection = $connection;
+        $this->autoUnderAttackManager = $autoUnderAttackManager;
     }
 
     public static function getDefaultName(): ?string
@@ -53,6 +60,11 @@ class BotGuardCollectMetricsCommand extends Command
             'mem_used_percent' => $metrics['memUsedPercent'],
             'source' => $metrics['source'],
         ]);
+
+        $this->autoUnderAttackManager->evaluate(
+            $this->normalizeCpuPercent($metrics['load1']),
+            $metrics['memUsedPercent']
+        );
 
         $io->success(sprintf(
             'Bot Guard metrics saved. load1=%s, load5=%s, load15=%s, memUsed=%s%%, source=%s',
@@ -166,5 +178,50 @@ class BotGuardCollectMetricsCommand extends Command
         }
 
         return number_format($value, $precision, '.', '');
+    }
+
+    private function normalizeCpuPercent(?float $load1): ?float
+    {
+        if (null === $load1) {
+            return null;
+        }
+
+        $cores = $this->detectCpuCores();
+        if ($cores < 1) {
+            $cores = 1;
+        }
+
+        $percent = ($load1 / $cores) * 100;
+
+        if ($percent < 0) {
+            return 0.0;
+        }
+
+        if ($percent > 100) {
+            return 100.0;
+        }
+
+        return round($percent, 2);
+    }
+
+    private function detectCpuCores(): int
+    {
+        $cpuInfoPath = '/proc/cpuinfo';
+        $cores = 1;
+
+        if (is_readable($cpuInfoPath)) {
+            $content = file_get_contents($cpuInfoPath);
+
+            if (is_string($content) && '' !== trim($content)) {
+                preg_match_all('/^processor\s*:\s*\d+/m', $content, $matches);
+                $detected = isset($matches[0]) ? count($matches[0]) : 0;
+
+                if ($detected > 0) {
+                    $cores = $detected;
+                }
+            }
+        }
+
+        return max(1, $cores);
     }
 }

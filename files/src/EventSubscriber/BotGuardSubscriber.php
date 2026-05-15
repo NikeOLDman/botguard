@@ -34,6 +34,8 @@ class BotGuardSubscriber implements EventSubscriberInterface
     private const CAPTCHA_BASE_DELAY_SECONDS = 5;
     private const CAPTCHA_MAX_DELAY_SECONDS = 900;
     private const CAPTCHA_STATE_TTL_SECONDS = 7200;
+    private const RATE_LIMIT_PREFIX = 'bot_guard.rate.';
+    private const REQUEST_ATTR_COMPLETE_JS_CHALLENGE = '_bot_guard_complete_js_challenge';
 
     /**
      * @var BotGuardDecider
@@ -94,16 +96,24 @@ class BotGuardSubscriber implements EventSubscriberInterface
             return;
         }
 
+        if ($this->isRateLimitExceeded($request)) {
+            $event->setResponse(new Response('', Response::HTTP_TOO_MANY_REQUESTS));
+
+            return;
+        }
+
         if ($this->isCaptchaAttempt($request)) {
             $event->setResponse($this->handleCaptchaAttempt($request));
 
             return;
         }
 
-        if ($this->hasValidAccessCookie($request) && '1' === (string) $request->query->get(BotGuardDecider::CHALLENGE_QUERY_PARAM, '')) {
-            $event->setResponse($this->createChallengeCleanupResponse($request));
+        if ('1' === (string) $request->query->get(BotGuardDecider::CHALLENGE_QUERY_PARAM, '')) {
+            if ($this->shouldCleanupChallengeQuery($request)) {
+                $event->setResponse($this->createChallengeCleanupResponse($request));
 
-            return;
+                return;
+            }
         }
 
         $decision = $this->decideSafely($request);
@@ -123,7 +133,9 @@ class BotGuardSubscriber implements EventSubscriberInterface
         }
 
         if (!$decision['blocked']) {
-            if (!$this->hasValidAccessCookie($request)) {
+            if ($this->decider->canCompleteJsChallenge($request)) {
+                $request->attributes->set(self::REQUEST_ATTR_COMPLETE_JS_CHALLENGE, true);
+            } elseif (!$this->hasValidAccessCookie($request) && !$this->isUnderAttackEnabled()) {
                 $request->attributes->set(self::REQUEST_ATTR_SET_ACCESS_COOKIE, true);
             }
 
@@ -156,6 +168,21 @@ class BotGuardSubscriber implements EventSubscriberInterface
         $request = $event->getRequest();
 
         if (0 === strpos((string) $request->getPathInfo(), '/admin')) {
+            return;
+        }
+
+        if (true === $request->attributes->get(self::REQUEST_ATTR_COMPLETE_JS_CHALLENGE, false)) {
+            $response = $event->getResponse();
+            $response->headers->setCookie($this->createAccessCookie($request));
+            $response->headers->setCookie($this->createJsChallengeCookie($request));
+            $response->headers->clearCookie(BotGuardDecider::CHALLENGE_COOKIE_NAME, '/');
+
+            if ($request->isMethod(Request::METHOD_GET) && '1' === (string) $request->query->get(BotGuardDecider::CHALLENGE_QUERY_PARAM, '')) {
+                $event->setResponse($this->createChallengeCleanupResponseWithCookies($request, $response));
+
+                return;
+            }
+
             return;
         }
 
@@ -397,6 +424,26 @@ class BotGuardSubscriber implements EventSubscriberInterface
         }
     }
 
+    /**
+     * В режиме «Под атакой» access-cookie без js-cookie недостаточна — иначе зацикливается JS-челлендж.
+     */
+    private function shouldCleanupChallengeQuery(Request $request): bool
+    {
+        if (!$this->hasValidAccessCookie($request)) {
+            return false;
+        }
+
+        if ($this->isUnderAttackEnabled()) {
+            try {
+                return $this->decider->hasValidJsChallengeCookie($request);
+            } catch (\Throwable $e) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private function createChallengeResponse(Request $request): Response
     {
         if ($this->isUnderAttackEnabled()) {
@@ -414,14 +461,14 @@ class BotGuardSubscriber implements EventSubscriberInterface
     private function createJsChallengeResponse(Request $request): Response
     {
         $target = htmlspecialchars($this->buildChallengeTarget($request), ENT_QUOTES, 'UTF-8');
-        $html = '<!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Проверка безопасности</title></head><body><noscript>Для продолжения включите JavaScript и обновите страницу.</noscript><script>(function(){document.cookie="'.BotGuardDecider::JS_COOKIE_NAME.'=1;path=/;max-age=900;SameSite=Lax";window.setTimeout(function(){window.location.replace("'.$target.'");},1200);}());</script></body></html>';
+        $html = '<!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Проверка безопасности</title></head><body><noscript>Для продолжения включите JavaScript и обновите страницу.</noscript><script>(function(){window.setTimeout(function(){window.location.replace("'.$target.'");},1200);}());</script></body></html>';
         $response = new Response($html, Response::HTTP_OK, [
             'Content-Type' => 'text/html; charset=UTF-8',
             'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
             'Pragma' => 'no-cache',
             'Expires' => '0',
         ]);
-        $response->headers->setCookie($this->createAccessCookie($request));
+        $response->headers->setCookie($this->createChallengeCookie($request));
 
         return $response;
     }
@@ -476,14 +523,32 @@ class BotGuardSubscriber implements EventSubscriberInterface
 
     private function createChallengeCleanupResponse(Request $request): Response
     {
+        return new Response('', Response::HTTP_FOUND, [
+            'Location' => $this->buildChallengeCleanupLocation($request),
+        ]);
+    }
+
+    private function createChallengeCleanupResponseWithCookies(Request $request, Response $sourceResponse): Response
+    {
+        $response = new Response('', Response::HTTP_FOUND, [
+            'Location' => $this->buildChallengeCleanupLocation($request),
+        ]);
+
+        foreach ($sourceResponse->headers->getCookies() as $cookie) {
+            $response->headers->setCookie($cookie);
+        }
+
+        return $response;
+    }
+
+    private function buildChallengeCleanupLocation(Request $request): string
+    {
         $query = $request->query->all();
         unset($query[BotGuardDecider::CHALLENGE_QUERY_PARAM]);
         unset($query[self::CAPTCHA_QUERY_PARAM]);
         $queryString = http_build_query($query);
 
-        return new Response('', Response::HTTP_FOUND, [
-            'Location' => $request->getPathInfo().('' !== $queryString ? '?'.$queryString : ''),
-        ]);
+        return $request->getPathInfo().('' !== $queryString ? '?'.$queryString : '');
     }
 
     private function buildCaptchaTarget(Request $request): string
@@ -540,8 +605,58 @@ class BotGuardSubscriber implements EventSubscriberInterface
         $response = $this->createChallengeCleanupResponse($request);
         $response->headers->setCookie($this->createAccessCookie($request));
         $response->headers->setCookie($this->createJsChallengeCookie($request));
+        $response->headers->clearCookie(BotGuardDecider::CHALLENGE_COOKIE_NAME, '/');
 
         return $response;
+    }
+
+    private function isRateLimitExceeded(Request $request): bool
+    {
+        try {
+            if (!$this->decider->isRateLimitEnabled()) {
+                return false;
+            }
+        } catch (\Throwable $e) {
+            return false;
+        }
+
+        if (null === $this->cache) {
+            return false;
+        }
+
+        $config = $this->decider->getRateLimitConfig();
+        $key = self::RATE_LIMIT_PREFIX.hash('sha256', $this->buildIpFingerprint((string) $request->getClientIp()));
+        $window = (int) $config['windowSeconds'];
+        $maxRequests = (int) $config['maxRequests'];
+        $now = time();
+
+        try {
+            $state = $this->cache->get($key, function (ItemInterface $item) use ($window, $now): array {
+                $item->expiresAfter($window);
+
+                return ['count' => 0, 'startedAt' => $now];
+            });
+
+            if (!is_array($state)) {
+                $state = ['count' => 0, 'startedAt' => $now];
+            }
+
+            if ((int) ($state['startedAt'] ?? 0) + $window < $now) {
+                $state = ['count' => 0, 'startedAt' => $now];
+            }
+
+            $state['count'] = (int) ($state['count'] ?? 0) + 1;
+            $this->cache->delete($key);
+            $this->cache->get($key, function (ItemInterface $item) use ($state, $window): array {
+                $item->expiresAfter($window);
+
+                return $state;
+            });
+
+            return (int) $state['count'] > $maxRequests;
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     private function validateCaptchaResponse(Request $request): bool
@@ -758,12 +873,27 @@ class BotGuardSubscriber implements EventSubscriberInterface
     {
         return Cookie::create(
             BotGuardDecider::JS_COOKIE_NAME,
-            '1',
+            $this->decider->buildJsCookieValue($request),
             new \DateTimeImmutable('+900 seconds'),
             '/',
             null,
             $request->isSecure(),
+            true,
             false,
+            Cookie::SAMESITE_LAX
+        );
+    }
+
+    private function createChallengeCookie(Request $request): Cookie
+    {
+        return Cookie::create(
+            BotGuardDecider::CHALLENGE_COOKIE_NAME,
+            $this->decider->buildChallengeCookieValue($request),
+            new \DateTimeImmutable('+600 seconds'),
+            '/',
+            null,
+            $request->isSecure(),
+            true,
             false,
             Cookie::SAMESITE_LAX
         );

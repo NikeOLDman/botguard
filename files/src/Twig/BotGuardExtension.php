@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Twig;
 
 use App\BotGuard\BotGuardStatsProvider;
+use App\Entity\BotGuard\BotGuardSettings;
+use Doctrine\ORM\EntityManagerInterface;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFunction;
 
@@ -15,16 +17,31 @@ class BotGuardExtension extends AbstractExtension
      */
     private $statsProvider;
 
-    public function __construct(BotGuardStatsProvider $statsProvider)
+    /**
+     * @var EntityManagerInterface
+     */
+    private $em;
+
+    public function __construct(BotGuardStatsProvider $statsProvider, EntityManagerInterface $em)
     {
         $this->statsProvider = $statsProvider;
+        $this->em = $em;
     }
 
     public function getFunctions(): array
     {
         return [
             new TwigFunction('bot_guard_stats', [$this, 'getStats']),
+            new TwigFunction('bot_guard_settings', [$this, 'getSettings']),
         ];
+    }
+
+    public function getSettings(): ?BotGuardSettings
+    {
+        /** @var BotGuardSettings|null $settings */
+        $settings = $this->em->getRepository(BotGuardSettings::class)->findOneBy([], ['id' => 'ASC']);
+
+        return $settings;
     }
 
     /**

@@ -15,6 +15,7 @@ class BotGuardDecider
 {
     public const ACCESS_COOKIE_NAME = 'bot_guard_access';
     public const JS_COOKIE_NAME = 'bot_guard_js';
+    public const CHALLENGE_COOKIE_NAME = 'bot_guard_ch';
     public const CHALLENGE_QUERY_PARAM = '_bgc';
 
     private const CACHE_TTL_SECONDS = 15;
@@ -61,6 +62,14 @@ class BotGuardDecider
             return $this->deny('empty_user_agent', null, null, $statusCode);
         }
 
+        if (!empty($settings['underAttack'])) {
+            $underAttackDecision = $this->decideUnderAttack($request, $settings, $statusCode);
+
+            if (null !== $underAttackDecision) {
+                return $underAttackDecision;
+            }
+        }
+
         $cookieRulesMatched = [];
         $rules = $this->getRulesData();
         foreach ($rules as $rule) {
@@ -86,14 +95,6 @@ class BotGuardDecider
             }
         }
 
-        if (!empty($settings['underAttack']) && !$this->hasValidJsChallengeCookie($request)) {
-            if ($this->isChallengeRetry($request)) {
-                return $this->deny('js_challenge_not_passed', null, null, $statusCode);
-            }
-
-            return $this->challenge('js_challenge_required', $statusCode);
-        }
-
         return $this->allow($statusCode);
     }
 
@@ -101,7 +102,41 @@ class BotGuardDecider
     {
         $settings = $this->getSettingsData();
 
+        if (!empty($settings['loggingEnabled']) && !empty($settings['underAttack']) && !empty($settings['reduceLoggingUnderAttack'])) {
+            return false;
+        }
+
         return !empty($settings['loggingEnabled']);
+    }
+
+    /**
+     * @param array<string, mixed> $settings
+     */
+    public function isRateLimitEnabled(array $settings = null): bool
+    {
+        $settings = $settings ?? $this->getSettingsData();
+
+        return !empty($settings['underAttack']) && !empty($settings['rateLimitEnabled']);
+    }
+
+    /**
+     * @param array<string, mixed> $settings
+     *
+     * @return array{maxRequests:int,windowSeconds:int}
+     */
+    public function getRateLimitConfig(array $settings = null): array
+    {
+        $settings = $settings ?? $this->getSettingsData();
+
+        return [
+            'maxRequests' => max(1, (int) ($settings['rateLimitMaxRequests'] ?? 60)),
+            'windowSeconds' => max(10, (int) ($settings['rateLimitWindowSeconds'] ?? 60)),
+        ];
+    }
+
+    public function canCompleteJsChallenge(Request $request): bool
+    {
+        return $this->isChallengeRetry($request) && $this->hasValidChallengeCookie($request);
     }
 
     public function isUserAgentWhitelisted(string $userAgent): bool
@@ -157,18 +192,105 @@ class BotGuardDecider
             return false;
         }
 
+        if (!$this->isSignedPayloadValid($request, $decoded, 'access')) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function hasValidJsChallengeCookie(Request $request): bool
+    {
+        return $this->hasValidSignedCookie($request, self::JS_COOKIE_NAME, 'js');
+    }
+
+    public function hasValidChallengeCookie(Request $request): bool
+    {
+        return $this->hasValidSignedCookie($request, self::CHALLENGE_COOKIE_NAME, 'challenge');
+    }
+
+    public function buildAccessCookieValue(Request $request): string
+    {
+        return $this->buildSignedCookieValue($request, 'access', 3600 * 6);
+    }
+
+    public function buildJsCookieValue(Request $request): string
+    {
+        return $this->buildSignedCookieValue($request, 'js', 900);
+    }
+
+    public function buildChallengeCookieValue(Request $request): string
+    {
+        return $this->buildSignedCookieValue($request, 'challenge', 600);
+    }
+
+    private function buildSignedCookieValue(Request $request, string $type, int $ttlSeconds): string
+    {
+        $expiresAt = time() + $ttlSeconds;
+        $payload = [
+            'v' => 2,
+            't' => $type,
+            'exp' => $expiresAt,
+            'ua' => hash('sha256', mb_strtolower(trim((string) $request->headers->get('User-Agent', '')))),
+            'ip' => hash('sha256', $this->buildIpFingerprint((string) $request->getClientIp())),
+            'rnd' => bin2hex(random_bytes(8)),
+        ];
+        $encoded = rtrim(strtr(base64_encode((string) json_encode($payload)), '+/', '-_'), '=');
+        $signature = hash_hmac('sha256', $encoded, $this->appSecret);
+
+        return $encoded.'.'.$signature;
+    }
+
+    private function hasValidSignedCookie(Request $request, string $cookieName, string $expectedType): bool
+    {
+        $raw = trim((string) $request->cookies->get($cookieName, ''));
+        if ('' === $raw) {
+            return false;
+        }
+
+        [$payload, $signature] = array_pad(explode('.', $raw, 2), 2, '');
+        if ('' === $payload || '' === $signature) {
+            return false;
+        }
+
+        $expected = hash_hmac('sha256', $payload, $this->appSecret);
+        if (!hash_equals($expected, $signature)) {
+            return false;
+        }
+
+        $decoded = json_decode((string) base64_decode(strtr($payload, '-_', '+/'), true), true);
+        if (!is_array($decoded)) {
+            return false;
+        }
+
+        $exp = isset($decoded['exp']) ? (int) $decoded['exp'] : 0;
+        if ($exp < time()) {
+            return false;
+        }
+
+        return $this->isSignedPayloadValid($request, $decoded, $expectedType);
+    }
+
+    /**
+     * @param array<string, mixed> $decoded
+     */
+    private function isSignedPayloadValid(Request $request, array $decoded, ?string $expectedType): bool
+    {
+        if (null !== $expectedType) {
+            $type = isset($decoded['t']) ? (string) $decoded['t'] : '';
+            if ($type !== $expectedType) {
+                return false;
+            }
+        }
+
         $uaHash = isset($decoded['ua']) ? (string) $decoded['ua'] : '';
-        if ('' === $uaHash) {
+        $ipHash = isset($decoded['ip']) ? (string) $decoded['ip'] : '';
+        if ('' === $uaHash || '' === $ipHash) {
             return false;
         }
 
         $actualUaHash = hash('sha256', mb_strtolower(trim((string) $request->headers->get('User-Agent', ''))));
         if (!hash_equals($uaHash, $actualUaHash)) {
-            return false;
-        }
-
-        $ipHash = isset($decoded['ip']) ? (string) $decoded['ip'] : '';
-        if ('' === $ipHash) {
             return false;
         }
 
@@ -180,25 +302,26 @@ class BotGuardDecider
         return true;
     }
 
-    public function hasValidJsChallengeCookie(Request $request): bool
+    /**
+     * @param array<string, mixed> $settings
+     *
+     * @return array{blocked: bool, challenge: bool, reason: ?string, ruleName: ?string, rulePattern: ?string, statusCode: int}|null
+     */
+    private function decideUnderAttack(Request $request, array $settings, int $statusCode): ?array
     {
-        return '1' === (string) $request->cookies->get(self::JS_COOKIE_NAME, '');
-    }
+        if ($this->hasValidAccessCookie($request) && $this->hasValidJsChallengeCookie($request)) {
+            return null;
+        }
 
-    public function buildAccessCookieValue(Request $request): string
-    {
-        $expiresAt = time() + 3600 * 6;
-        $payload = [
-            'v' => 2,
-            'exp' => $expiresAt,
-            'ua' => hash('sha256', mb_strtolower(trim((string) $request->headers->get('User-Agent', '')))),
-            'ip' => hash('sha256', $this->buildIpFingerprint((string) $request->getClientIp())),
-            'rnd' => bin2hex(random_bytes(8)),
-        ];
-        $encoded = rtrim(strtr(base64_encode((string) json_encode($payload)), '+/', '-_'), '=');
-        $signature = hash_hmac('sha256', $encoded, $this->appSecret);
+        if ($this->canCompleteJsChallenge($request)) {
+            return $this->allow($statusCode);
+        }
 
-        return $encoded.'.'.$signature;
+        if ($this->isChallengeRetry($request)) {
+            return $this->deny('js_challenge_not_passed', null, null, $statusCode);
+        }
+
+        return $this->challenge('js_challenge_required', $statusCode);
     }
 
     private function buildIpFingerprint(string $ip): string
@@ -235,6 +358,15 @@ class BotGuardDecider
             'trustReferrer' => false,
             'cookieWhitelistUas' => '',
             'statusCode' => 403,
+            'rateLimitEnabled' => true,
+            'rateLimitMaxRequests' => 60,
+            'rateLimitWindowSeconds' => 60,
+            'reduceLoggingUnderAttack' => true,
+            'autoUnderAttackEnabled' => false,
+            'autoUnderAttackCpuPercent' => 95,
+            'autoUnderAttackMemPercent' => 95,
+            'autoUnderAttackDurationMinutes' => 3,
+            'autoUnderAttackReleasePercent' => 75,
         ];
 
         if (null === $this->cache) {
@@ -274,6 +406,15 @@ class BotGuardDecider
             'trustReferrer' => $settings->isTrustReferrer(),
             'cookieWhitelistUas' => (string) $settings->getCookieWhitelistUserAgents(),
             'statusCode' => $settings->getBlockStatusCode(),
+            'rateLimitEnabled' => $settings->isRateLimitEnabled(),
+            'rateLimitMaxRequests' => $settings->getRateLimitMaxRequests(),
+            'rateLimitWindowSeconds' => $settings->getRateLimitWindowSeconds(),
+            'reduceLoggingUnderAttack' => $settings->isReduceLoggingUnderAttack(),
+            'autoUnderAttackEnabled' => $settings->isAutoUnderAttackEnabled(),
+            'autoUnderAttackCpuPercent' => $settings->getAutoUnderAttackCpuPercent(),
+            'autoUnderAttackMemPercent' => $settings->getAutoUnderAttackMemPercent(),
+            'autoUnderAttackDurationMinutes' => $settings->getAutoUnderAttackDurationMinutes(),
+            'autoUnderAttackReleasePercent' => $settings->getAutoUnderAttackReleasePercent(),
         ];
     }
 

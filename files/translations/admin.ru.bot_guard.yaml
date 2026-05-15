@@ -30,15 +30,15 @@ bot_guard_log:
 bot_guard_settings:
     action:
         index:
-            title: Настройки Bot Guard
-            link: Настройки
+            title: Настройки защиты сайта
+            link: Настройки защиты сайта
         new:
-            title: Добавить настройки Bot Guard
+            title: Добавить настройки защиты сайта
             link: Добавить настройки
         show:
-            title: Просмотр настроек Bot Guard
+            title: Просмотр настроек защиты сайта
         edit:
-            title: Редактировать настройки Bot Guard
+            title: Настройки защиты сайта
     entity:
         id: ID
         enabled: Защита включена
@@ -49,6 +49,15 @@ bot_guard_settings:
         cookie_whitelist_user_agents: Белый список User-Agent для обхода cookie-проверки
         block_status_code: Код ответа при блокировке
         retention_days: Хранить логи (дней)
+        rate_limit_enabled: Rate limit в режиме «Под атакой»
+        rate_limit_max_requests: Лимит запросов с IP (за окно)
+        rate_limit_window_seconds: Окно rate limit (сек)
+        reduce_logging_under_attack: Снизить логирование в режиме «Под атакой»
+        auto_under_attack_enabled: Автовключение режима «Под атакой» по нагрузке
+        auto_under_attack_cpu_percent: Порог CPU (%), включение
+        auto_under_attack_mem_percent: Порог RAM (%), включение
+        auto_under_attack_duration_minutes: Длительность повышенной нагрузки (мин, cron-шаги)
+        auto_under_attack_release_percent: Порог снижения нагрузки (%), выключение
         updated_at: Обновлено
 
 bot_guard_rule:
@@ -79,4 +88,3 @@ bot_guard_rule:
         ip_exact: Точный IP
         uri_contains: URI содержит
         cookie_required: Cookie-проверка для пути
-

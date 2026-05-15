@@ -1,0 +1,222 @@
+{% set s = settings %}
+
+<style>
+    .bg-page{font-family:inherit;color:#1f2937;line-height:1.45}
+    .bg-page *{box-sizing:border-box}
+    .bg-head{display:flex;gap:20px;align-items:flex-start;margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid #e8edf3}
+    .bg-head__logo{flex:0 0 246px;width:246px;height:246px;object-fit:contain}
+    .bg-head__body{flex:1;min-width:0}
+    .bg-head__brand{margin:0 0 6px;font-size:30px;font-weight:800;line-height:1.15;letter-spacing:-.03em;color:#1a4d7a}
+    .bg-head__tagline{margin:0 0 12px;font-size:15px;font-weight:600;color:#465d78;line-height:1.35}
+    .bg-head__desc{margin:0 0 14px;font-size:14px;color:#64748b;max-width:720px;line-height:1.5}
+    .bg-dash{display:flex;align-items:stretch;border:1px solid #e5e9ef;border-radius:12px;background:#fafbfc;overflow:hidden}
+    .bg-dash__cell{flex:1 1 0;min-width:0;padding:12px 16px;background:#fff;position:relative}
+    .bg-dash__cell+.bg-dash__cell{border-left:1px solid #e8ecf1}
+    .bg-dash__cell--on{background:linear-gradient(180deg,rgba(85,183,100,.07) 0%,#fff 100%)}
+    .bg-dash__cell--alert{background:linear-gradient(180deg,rgba(239,68,68,.06) 0%,#fff 100%)}
+    .bg-dash__cell--idle{background:#fff}
+    .bg-dash__label{margin:0 0 6px;font-size:11px;font-weight:500;color:#64748b;line-height:1.2}
+    .bg-dash__value{display:flex;align-items:center;gap:7px;margin:0;font-size:14px;font-weight:600;color:#1e293b;line-height:1.3}
+    .bg-dash__signal{flex:0 0 8px;width:8px;height:8px;border-radius:50%}
+    .bg-dash__signal--on{background:#55b764;box-shadow:0 0 0 3px rgba(85,183,100,.22)}
+    .bg-dash__signal--off{background:#cbd5e1}
+    .bg-dash__signal--alert{background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.18)}
+    .bg-dash__signal--neutral{background:#94a3b8}
+    .bg-dash__detail{margin:5px 0 0;padding-left:15px;font-size:11px;color:#94a3b8;line-height:1.35}
+    .bg-section{background:#fff;border:1px solid #e6ebf2;border-radius:12px;padding:18px 20px;margin-bottom:14px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+    .bg-section__title{margin:0 0 4px;font-size:16px;font-weight:700;color:#111827}
+    .bg-section__hint{margin:0 0 16px;font-size:13px;color:#64748b}
+    .bg-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 20px}
+    .bg-grid--1{grid-template-columns:1fr}
+    .bg-field{margin:0}
+    .bg-field .form-group{margin:0}
+    .bg-field label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+    .bg-field .help, .bg-field .form-help, .bg-field .form-text, .bg-field ul{font-size:12px;color:#64748b;margin-top:4px}
+    .bg-field input[type="text"], .bg-field input[type="number"], .bg-field textarea{width:100%;max-width:100%;padding:9px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;background:#fff}
+    .bg-field input:focus, .bg-field textarea:focus{outline:none;border-color:#38bdf8;box-shadow:0 0 0 3px rgba(56,189,248,.15)}
+    .bg-field textarea{resize:vertical;min-height:100px}
+    .bg-toggle{display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border:1px solid #eef2f7;border-radius:10px;background:#fafbfc}
+    .bg-toggle input[type="checkbox"]{width:18px;height:18px;margin:2px 0 0;accent-color:#0284c7;flex-shrink:0}
+    .bg-toggle__text{flex:1}
+    .bg-toggle__label{font-size:14px;font-weight:600;color:#1f2937;display:block;margin:0}
+    .bg-toggle__help{font-size:12px;color:#64748b;margin-top:3px}
+    .bg-cron{background:#f8fafc;border:1px dashed #cbd5e1;border-radius:10px;padding:12px 14px;margin-top:12px}
+    .bg-cron__title{font-size:13px;font-weight:700;color:#334155;margin:0 0 8px}
+    .bg-cron__text{font-size:12px;color:#64748b;margin:0 0 10px}
+    .bg-cron pre{margin:0;padding:12px;background:#0f172a;color:#e2e8f0;border-radius:8px;font-size:12px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;word-break:break-all}
+    .bg-note{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 14px;font-size:13px;color:#78350f;margin-bottom:14px}
+    .bg-note code{background:#fef3c7;padding:1px 5px;border-radius:4px;font-size:12px}
+    .bg-actions{display:flex;align-items:center;gap:12px;margin-top:6px;padding-top:4px;flex-wrap:wrap}
+    .bg-btn-save{display:inline-flex;align-items:center;justify-content:center;padding:11px 22px;border:none;border-radius:8px;background:#55b764;color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px rgba(85,183,100,.35)}
+    .bg-btn-save:hover{background:#48a356}
+    .bg-meta{font-size:12px;color:#94a3b8}
+    .bg-errors{color:#b91c1c;font-size:13px;margin-bottom:12px}
+    .bg-errors ul{margin:0;padding-left:18px}
+    @media (max-width:900px){.bg-dash{flex-wrap:wrap}.bg-dash__cell{flex:1 1 50%;border-left:none!important;border-top:1px solid #e8ecf1}.bg-dash__cell:nth-child(-n+2){border-top:none}}
+    @media (max-width:768px){.bg-head{flex-direction:column;align-items:center;text-align:center}.bg-head__desc,.bg-head__tagline{margin-left:auto;margin-right:auto}.bg-dash__cell{flex:1 1 100%;border-top:1px solid #e8ecf1!important}.bg-dash__cell:first-child{border-top:none!important}.bg-grid{grid-template-columns:1fr}}
+</style>
+
+<div class="bg-page">
+    <header class="bg-head">
+        <img class="bg-head__logo" src="{{ asset('assets/images/bot-guard/logo.png') }}" alt="Твердыня" loading="lazy">
+        <div class="bg-head__body">
+            <h1 class="bg-head__brand">Твердыня</h1>
+            <p class="bg-head__tagline">Неприступная крепость вашего сайта</p>
+            <p class="bg-head__desc">
+                Блокировки по правилам, cookie-проверка, режим «Под атакой», rate limit и автовключение защиты по нагрузке сервера.
+            </p>
+            <div class="bg-dash" role="list" aria-label="Статус защиты">
+                <div class="bg-dash__cell bg-dash__cell--{{ s.enabled ? 'on' : 'idle' }}" role="listitem">
+                    <p class="bg-dash__label">Защита</p>
+                    <p class="bg-dash__value">
+                        <span class="bg-dash__signal bg-dash__signal--{{ s.enabled ? 'on' : 'off' }}" aria-hidden="true"></span>
+                        {{ s.enabled ? 'Включена' : 'Выключена' }}
+                    </p>
+                </div>
+                <div class="bg-dash__cell bg-dash__cell--{{ s.underAttack ? 'alert' : 'idle' }}" role="listitem">
+                    <p class="bg-dash__label">Под атакой</p>
+                    <p class="bg-dash__value">
+                        <span class="bg-dash__signal bg-dash__signal--{{ s.underAttack ? 'alert' : 'off' }}" aria-hidden="true"></span>
+                        {{ s.underAttack ? 'Активен' : 'Выключен' }}
+                    </p>
+                    {% if s.underAttack %}
+                        <p class="bg-dash__detail">JS-челлендж и CAPTCHA</p>
+                    {% endif %}
+                </div>
+                <div class="bg-dash__cell bg-dash__cell--{{ s.autoUnderAttackEnabled ? 'on' : 'idle' }}" role="listitem">
+                    <p class="bg-dash__label">Авто «Под атакой»</p>
+                    <p class="bg-dash__value">
+                        <span class="bg-dash__signal bg-dash__signal--{{ s.autoUnderAttackEnabled ? 'on' : 'neutral' }}" aria-hidden="true"></span>
+                        {{ s.autoUnderAttackEnabled ? 'Включено' : 'Выключено' }}
+                    </p>
+                    {% if s.autoUnderAttackEnabled %}
+                        <p class="bg-dash__detail">Порог CPU {{ s.autoUnderAttackCpuPercent }}% · RAM {{ s.autoUnderAttackMemPercent }}%</p>
+                    {% endif %}
+                </div>
+                <div class="bg-dash__cell bg-dash__cell--idle" role="listitem">
+                    <p class="bg-dash__label">Rate limit</p>
+                    <p class="bg-dash__value">
+                        <span class="bg-dash__signal bg-dash__signal--{{ s.rateLimitEnabled and s.underAttack ? 'on' : 'neutral' }}" aria-hidden="true"></span>
+                        {% if s.rateLimitEnabled %}
+                            {{ s.rateLimitMaxRequests }} запр. / {{ s.rateLimitWindowSeconds }} с
+                        {% else %}
+                            Отключён
+                        {% endif %}
+                    </p>
+                    {% if s.rateLimitEnabled %}
+                        <p class="bg-dash__detail">Только в режиме «Под атакой»</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="bg-note">
+        <b>Совет:</b> для поисковых роботов в обычном режиме добавьте их в белый список User-Agent
+        (<code>YandexBot</code>, <code>Googlebot</code>). В режиме «Под атакой» белый список не действует.
+    </div>
+
+    {{ form_start(form, {attr: {class: 'bg-form'}}) }}
+
+    {% if not form.vars.valid %}
+        <div class="bg-errors">
+            <ul>
+                {% for error in form.vars.errors %}
+                    <li>{{ error.message }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    <section class="bg-section">
+        <h2 class="bg-section__title">Основное</h2>
+        <p class="bg-section__hint">Глобальное включение защиты и базовые параметры ответа.</p>
+        <div class="bg-grid bg-grid--1">
+            {% for name in ['enabled', 'underAttack', 'blockEmptyUserAgent', 'loggingEnabled', 'trustReferrer'] %}
+                {% set field = attribute(form, name) %}
+                <div class="bg-field bg-toggle">
+                    {{ form_widget(field) }}
+                    <div class="bg-toggle__text">
+                        {{ form_label(field, null, {label_attr: {class: 'bg-toggle__label'}}) }}
+                        {% if name == 'trustReferrer' %}
+                            <div class="bg-toggle__help">В обычном режиме: cookie без редиректа при переходе с другого сайта. Не действует в режиме «Под атакой».</div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        <div class="bg-grid" style="margin-top:14px;">
+            <div class="bg-field">{{ form_row(form.blockStatusCode, {label_attr: {class: ''}}) }}</div>
+            <div class="bg-field">{{ form_row(form.retentionDays) }}</div>
+        </div>
+    </section>
+
+    <section class="bg-section">
+        <h2 class="bg-section__title">Cookie и поисковые боты</h2>
+        <p class="bg-section__hint">Настройки cookie-проверки вне режима «Под атакой». По одному User-Agent в строке.</p>
+        <div class="bg-field">{{ form_row(form.cookieWhitelistUserAgents) }}</div>
+    </section>
+
+    <section class="bg-section">
+        <h2 class="bg-section__title">Режим «Под атакой»</h2>
+        <p class="bg-section__hint">Усиленная защита: JS-челлендж, CAPTCHA, лимит запросов с одного IP.</p>
+        <div class="bg-grid bg-grid--1">
+            {% for name in ['rateLimitEnabled', 'reduceLoggingUnderAttack'] %}
+                {% set field = attribute(form, name) %}
+                <div class="bg-field bg-toggle">
+                    {{ form_widget(field) }}
+                    <div class="bg-toggle__text">
+                        {{ form_label(field, null, {label_attr: {class: 'bg-toggle__label'}}) }}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        <div class="bg-grid" style="margin-top:14px;">
+            <div class="bg-field">{{ form_row(form.rateLimitMaxRequests) }}</div>
+            <div class="bg-field">{{ form_row(form.rateLimitWindowSeconds) }}</div>
+        </div>
+    </section>
+
+    <section class="bg-section">
+        <h2 class="bg-section__title">Автовключение «Под атакой»</h2>
+        <p class="bg-section__hint">
+            При превышении порогов CPU/RAM команда снимает метрики и может включить режим «Под атакой» на заданное время.
+        </p>
+        <div class="bg-grid bg-grid--1" style="margin-bottom:14px;">
+            <div class="bg-field bg-toggle">
+                {{ form_widget(form.autoUnderAttackEnabled) }}
+                <div class="bg-toggle__text">
+                    {{ form_label(form.autoUnderAttackEnabled, null, {label_attr: {class: 'bg-toggle__label'}}) }}
+                </div>
+            </div>
+        </div>
+        <div class="bg-grid">
+            <div class="bg-field">{{ form_row(form.autoUnderAttackCpuPercent) }}</div>
+            <div class="bg-field">{{ form_row(form.autoUnderAttackMemPercent) }}</div>
+            <div class="bg-field">{{ form_row(form.autoUnderAttackDurationMinutes) }}</div>
+            <div class="bg-field">{{ form_row(form.autoUnderAttackReleasePercent) }}</div>
+        </div>
+
+        <div class="bg-cron">
+            <p class="bg-cron__title">Настройка cron (обязательно для авто-режима)</p>
+            <p class="bg-cron__text">
+                Добавьте задачу на сервере под пользователем, от которого крутится сайт. Рекомендуется запуск <b>раз в минуту</b>.
+                Без cron автовключение и графики нагрузки в журнале работать не будут.
+            </p>
+            <pre>* * * * * cd {{ project_dir|e('js') }} && {{ php_binary|e('js') }} bin/console app:bot-guard:collect-metrics --env=prod >> /var/log/bot-guard-metrics.log 2>&amp;1</pre>
+            <p class="bg-cron__text" style="margin-top:10px;margin-bottom:0;">
+                Для разработки замените <code>--env=prod</code> на <code>--env=dev</code> или уберите флаг, если окружение задаётся в <code>.env</code>.
+                Лог-файл можно изменить или перенаправить вывод в <code>/dev/null</code>, если журнал не нужен.
+            </p>
+        </div>
+    </section>
+
+    <div class="bg-actions">
+        {{ form_widget(form.save, {attr: {class: 'bg-btn-save'}}) }}
+        {% if s.updatedAt %}
+            <span class="bg-meta">Обновлено: {{ s.updatedAt|date('d.m.Y H:i') }}</span>
+        {% endif %}
+    </div>
+
+    {{ form_end(form) }}
+</div>

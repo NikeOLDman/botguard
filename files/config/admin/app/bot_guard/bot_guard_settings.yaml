@@ -18,6 +18,8 @@ sortable_fields:
   updatedAt: updatedAt
 
 view:
+  edit:
+    template: 'admin/bot_guard/settings/edit.html.twig'
   index:
     template: 'admin/bot_guard/settings/index.html.twig'
     fields:
@@ -42,6 +44,27 @@ view:
       cookieWhitelistUserAgents:
         size: xxxl
       retentionDays:
+        size: xl
+      rateLimitEnabled:
+        size: xl
+        type: checkbox
+      rateLimitMaxRequests:
+        size: xl
+      rateLimitWindowSeconds:
+        size: xl
+      reduceLoggingUnderAttack:
+        size: xl
+        type: checkbox
+      autoUnderAttackEnabled:
+        size: xl
+        type: checkbox
+      autoUnderAttackCpuPercent:
+        size: xl
+      autoUnderAttackMemPercent:
+        size: xl
+      autoUnderAttackDurationMinutes:
+        size: xl
+      autoUnderAttackReleasePercent:
         size: xl
       updatedAt:
         size: xl
@@ -73,6 +96,15 @@ form:
       blockStatusCode: ~
       cookieWhitelistUserAgents: ~
       retentionDays: ~
+      rateLimitEnabled: ~
+      rateLimitMaxRequests: ~
+      rateLimitWindowSeconds: ~
+      reduceLoggingUnderAttack: ~
+      autoUnderAttackEnabled: ~
+      autoUnderAttackCpuPercent: ~
+      autoUnderAttackMemPercent: ~
+      autoUnderAttackDurationMinutes: ~
+      autoUnderAttackReleasePercent: ~
   edit:
     fields:
       enabled: ~
@@ -93,3 +125,36 @@ form:
           attr:
             min: 1
             max: 3650
+      rateLimitEnabled: ~
+      rateLimitMaxRequests:
+        options:
+          attr:
+            min: 1
+            max: 10000
+      rateLimitWindowSeconds:
+        options:
+          attr:
+            min: 10
+            max: 3600
+      reduceLoggingUnderAttack: ~
+      autoUnderAttackEnabled: ~
+      autoUnderAttackCpuPercent:
+        options:
+          attr:
+            min: 50
+            max: 100
+      autoUnderAttackMemPercent:
+        options:
+          attr:
+            min: 50
+            max: 100
+      autoUnderAttackDurationMinutes:
+        options:
+          attr:
+            min: 1
+            max: 120
+      autoUnderAttackReleasePercent:
+        options:
+          attr:
+            min: 40
+            max: 99

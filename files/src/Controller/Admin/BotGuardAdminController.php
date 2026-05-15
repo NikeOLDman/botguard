@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Controller\Admin;
 
 use App\BotGuard\BotGuardLogCleaner;
+use App\BotGuard\BotGuardSettingsCache;
 use App\Entity\BotGuard\BotGuardRule;
 use App\Entity\BotGuard\BotGuardSettings;
+use App\Form\Admin\BotGuardSettingsType;
 use Doctrine\ORM\EntityManagerInterface;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -20,6 +22,54 @@ class BotGuardAdminController extends AbstractController
 {
     private const IMPORT_FILE_MAX_SIZE_BYTES = 1048576;
     private const IMPORT_MAX_RULES = 2000;
+
+    /**
+     * @Route("/admin/bot-guard-settings/panel", name="app_admin_bot_guard_settings_panel", methods={"GET"})
+     * @IsGranted("ROLE_ADMIN")
+     */
+    public function settingsPanel(Request $request, EntityManagerInterface $em): Response
+    {
+        $settings = $this->getOrCreateSettings($em);
+        $form = $this->createForm(BotGuardSettingsType::class, $settings, [
+            'action' => $this->generateUrl('app_admin_bot_guard_settings_save'),
+            'method' => 'POST',
+        ]);
+
+        return $this->render('admin/bot_guard/settings/page.html.twig', [
+            'settings' => $settings,
+            'form' => $form->createView(),
+            'project_dir' => $this->getParameter('kernel.project_dir'),
+            'php_binary' => PHP_BINARY,
+        ]);
+    }
+
+    /**
+     * @Route("/admin/bot-guard-settings/save", name="app_admin_bot_guard_settings_save", methods={"POST"})
+     * @IsGranted("ROLE_ADMIN")
+     */
+    public function saveSettings(
+        Request $request,
+        EntityManagerInterface $em,
+        BotGuardSettingsCache $settingsCache
+    ): RedirectResponse {
+        $settings = $this->getOrCreateSettings($em);
+
+        $form = $this->createForm(BotGuardSettingsType::class, $settings);
+        $form->handleRequest($request);
+
+        if (!$form->isSubmitted() || !$form->isValid()) {
+            $this->addFlash('danger', 'Не удалось сохранить настройки защиты сайта. Проверьте заполнение полей.');
+
+            return $this->redirectToSettingsIndex($request);
+        }
+
+        $em->flush();
+        $settingsCache->invalidate();
+
+        $this->addFlash('success', 'Настройки «Твердыня» сохранены. Изменения применятся в течение ~15 секунд.');
+
+        return $this->redirectToSettingsIndex($request);
+    }
 
     /**
      * @Route("/admin/bot-guard/cleanup", name="app_admin_bot_guard_cleanup")
@@ -167,14 +217,27 @@ class BotGuardAdminController extends AbstractController
 
     private function resolveRetentionDays(EntityManagerInterface $em): int
     {
+        return max(1, $this->getOrCreateSettings($em)->getRetentionDays());
+    }
+
+    private function getOrCreateSettings(EntityManagerInterface $em): BotGuardSettings
+    {
         /** @var BotGuardSettings|null $settings */
         $settings = $em->getRepository(BotGuardSettings::class)->findOneBy([], ['id' => 'ASC']);
 
-        if (!$settings instanceof BotGuardSettings) {
-            return 60;
+        if ($settings instanceof BotGuardSettings) {
+            return $settings;
         }
 
-        return max(1, $settings->getRetentionDays());
+        $settings = (new BotGuardSettings())
+            ->setEnabled(true)
+            ->setBlockEmptyUserAgent(true)
+            ->setLoggingEnabled(true);
+
+        $em->persist($settings);
+        $em->flush();
+
+        return $settings;
     }
 
     /**
@@ -337,6 +400,11 @@ class BotGuardAdminController extends AbstractController
         }
 
         return $this->redirectToRoute('darvin_admin_homepage');
+    }
+
+    private function redirectToSettingsIndex(Request $request): RedirectResponse
+    {
+        return $this->redirectToRoute('admin_bot_guard_settings.'.$request->getLocale());
     }
 }
 

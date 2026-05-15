@@ -90,6 +90,69 @@ class BotGuardSettings
     private $retentionDays = 60;
 
     /**
+     * @var bool
+     *
+     * @ORM\Column(type="boolean")
+     */
+    private $rateLimitEnabled = true;
+
+    /**
+     * @var int
+     *
+     * @ORM\Column(type="integer")
+     */
+    private $rateLimitMaxRequests = 60;
+
+    /**
+     * @var int
+     *
+     * @ORM\Column(type="integer")
+     */
+    private $rateLimitWindowSeconds = 60;
+
+    /**
+     * @var bool
+     *
+     * @ORM\Column(type="boolean")
+     */
+    private $reduceLoggingUnderAttack = true;
+
+    /**
+     * @var bool
+     *
+     * @ORM\Column(type="boolean")
+     */
+    private $autoUnderAttackEnabled = false;
+
+    /**
+     * @var int
+     *
+     * @ORM\Column(type="integer")
+     */
+    private $autoUnderAttackCpuPercent = 95;
+
+    /**
+     * @var int
+     *
+     * @ORM\Column(type="integer")
+     */
+    private $autoUnderAttackMemPercent = 95;
+
+    /**
+     * @var int
+     *
+     * @ORM\Column(type="integer")
+     */
+    private $autoUnderAttackDurationMinutes = 3;
+
+    /**
+     * @var int
+     *
+     * @ORM\Column(type="integer")
+     */
+    private $autoUnderAttackReleasePercent = 75;
+
+    /**
      * @var \DateTimeInterface|null
      *
      * @ORM\Column(type="datetime")
@@ -224,6 +287,162 @@ class BotGuardSettings
         }
 
         $this->retentionDays = $retentionDays;
+
+        return $this;
+    }
+
+    public function isRateLimitEnabled(): bool
+    {
+        return $this->rateLimitEnabled;
+    }
+
+    public function setRateLimitEnabled(bool $rateLimitEnabled): self
+    {
+        $this->rateLimitEnabled = $rateLimitEnabled;
+
+        return $this;
+    }
+
+    public function getRateLimitMaxRequests(): int
+    {
+        return $this->rateLimitMaxRequests;
+    }
+
+    public function setRateLimitMaxRequests(int $rateLimitMaxRequests): self
+    {
+        if ($rateLimitMaxRequests < 1) {
+            $rateLimitMaxRequests = 1;
+        }
+
+        if ($rateLimitMaxRequests > 10000) {
+            $rateLimitMaxRequests = 10000;
+        }
+
+        $this->rateLimitMaxRequests = $rateLimitMaxRequests;
+
+        return $this;
+    }
+
+    public function getRateLimitWindowSeconds(): int
+    {
+        return $this->rateLimitWindowSeconds;
+    }
+
+    public function setRateLimitWindowSeconds(int $rateLimitWindowSeconds): self
+    {
+        if ($rateLimitWindowSeconds < 10) {
+            $rateLimitWindowSeconds = 10;
+        }
+
+        if ($rateLimitWindowSeconds > 3600) {
+            $rateLimitWindowSeconds = 3600;
+        }
+
+        $this->rateLimitWindowSeconds = $rateLimitWindowSeconds;
+
+        return $this;
+    }
+
+    public function isReduceLoggingUnderAttack(): bool
+    {
+        return $this->reduceLoggingUnderAttack;
+    }
+
+    public function setReduceLoggingUnderAttack(bool $reduceLoggingUnderAttack): self
+    {
+        $this->reduceLoggingUnderAttack = $reduceLoggingUnderAttack;
+
+        return $this;
+    }
+
+    public function isAutoUnderAttackEnabled(): bool
+    {
+        return $this->autoUnderAttackEnabled;
+    }
+
+    public function setAutoUnderAttackEnabled(bool $autoUnderAttackEnabled): self
+    {
+        $this->autoUnderAttackEnabled = $autoUnderAttackEnabled;
+
+        return $this;
+    }
+
+    public function getAutoUnderAttackCpuPercent(): int
+    {
+        return $this->autoUnderAttackCpuPercent;
+    }
+
+    public function setAutoUnderAttackCpuPercent(int $autoUnderAttackCpuPercent): self
+    {
+        if ($autoUnderAttackCpuPercent < 50) {
+            $autoUnderAttackCpuPercent = 50;
+        }
+
+        if ($autoUnderAttackCpuPercent > 100) {
+            $autoUnderAttackCpuPercent = 100;
+        }
+
+        $this->autoUnderAttackCpuPercent = $autoUnderAttackCpuPercent;
+
+        return $this;
+    }
+
+    public function getAutoUnderAttackMemPercent(): int
+    {
+        return $this->autoUnderAttackMemPercent;
+    }
+
+    public function setAutoUnderAttackMemPercent(int $autoUnderAttackMemPercent): self
+    {
+        if ($autoUnderAttackMemPercent < 50) {
+            $autoUnderAttackMemPercent = 50;
+        }
+
+        if ($autoUnderAttackMemPercent > 100) {
+            $autoUnderAttackMemPercent = 100;
+        }
+
+        $this->autoUnderAttackMemPercent = $autoUnderAttackMemPercent;
+
+        return $this;
+    }
+
+    public function getAutoUnderAttackDurationMinutes(): int
+    {
+        return $this->autoUnderAttackDurationMinutes;
+    }
+
+    public function setAutoUnderAttackDurationMinutes(int $autoUnderAttackDurationMinutes): self
+    {
+        if ($autoUnderAttackDurationMinutes < 1) {
+            $autoUnderAttackDurationMinutes = 1;
+        }
+
+        if ($autoUnderAttackDurationMinutes > 120) {
+            $autoUnderAttackDurationMinutes = 120;
+        }
+
+        $this->autoUnderAttackDurationMinutes = $autoUnderAttackDurationMinutes;
+
+        return $this;
+    }
+
+    public function getAutoUnderAttackReleasePercent(): int
+    {
+        return $this->autoUnderAttackReleasePercent;
+    }
+
+    public function setAutoUnderAttackReleasePercent(int $autoUnderAttackReleasePercent): self
+    {
+        if ($autoUnderAttackReleasePercent < 40) {
+            $autoUnderAttackReleasePercent = 40;
+        }
+
+        if ($autoUnderAttackReleasePercent > 99) {
+            $autoUnderAttackReleasePercent = 99;
+        }
+
+        $this->autoUnderAttackReleasePercent = $autoUnderAttackReleasePercent;
 
         return $this;
     }
