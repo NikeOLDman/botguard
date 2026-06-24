@@ -53,9 +53,8 @@ class BotGuardSettings
     private $underAttack = false;
 
     /**
-     * Белый список User-Agent для обхода cookie-проверки.
+     * Белый список User-Agent для обхода проверок (включая режим «Под атакой»).
      * Значения разделяются переносом строки или запятой.
-     * Не применяется в режиме "Под атакой".
      *
      * @var string|null
      *
@@ -64,14 +63,67 @@ class BotGuardSettings
     private $cookieWhitelistUserAgents;
 
     /**
-     * Разрешает пропуск cookie-челленджа для внешнего referrer:
-     * cookie ставится сразу в текущем ответе без редиректа.
+     * Разрешает пропуск мягкой cookie-проверки для доверенного внешнего referrer.
+     * Для страниц фильтров каталога из CMS referrer из поиска учитывается всегда (см. catalogFilterPagesSoftCheck).
      *
      * @var bool
      *
      * @ORM\Column(type="boolean")
      */
     private $trustReferrer = false;
+
+    /**
+     * Домены доверенного referrer (по одному в строке). Пусто — встроенный список (Яндекс, Google, VK).
+     *
+     * @var string|null
+     *
+     * @ORM\Column(type="text", nullable=true)
+     */
+    private $trustedReferrerDomains;
+
+    /**
+     * @var bool
+     *
+     * @ORM\Column(type="boolean")
+     */
+    private $pathRateLimitEnabled = true;
+
+    /**
+     * @var string
+     *
+     * @ORM\Column(type="string", length=255)
+     */
+    private $pathRateLimitUriPattern = '/filtered';
+
+    /**
+     * @var int
+     *
+     * @ORM\Column(type="integer")
+     */
+    private $pathRateLimitMaxRequests = 30;
+
+    /**
+     * @var int
+     *
+     * @ORM\Column(type="integer")
+     */
+    private $pathRateLimitWindowSeconds = 60;
+
+    /**
+     * @var int
+     *
+     * @ORM\Column(type="integer")
+     */
+    private $jsChallengeMinDelayMs = 1200;
+
+    /**
+     * Мягкая cookie-проверка для страниц фильтров каталога из CMS (перебивает strict для /filtered).
+     *
+     * @var bool
+     *
+     * @ORM\Column(type="boolean")
+     */
+    private $catalogFilterPagesSoftCheck = true;
 
     /**
      * @var int
@@ -443,6 +495,119 @@ class BotGuardSettings
         }
 
         $this->autoUnderAttackReleasePercent = $autoUnderAttackReleasePercent;
+
+        return $this;
+    }
+
+    public function getTrustedReferrerDomains(): ?string
+    {
+        return $this->trustedReferrerDomains;
+    }
+
+    public function setTrustedReferrerDomains(?string $trustedReferrerDomains): self
+    {
+        $this->trustedReferrerDomains = $trustedReferrerDomains;
+
+        return $this;
+    }
+
+    public function isPathRateLimitEnabled(): bool
+    {
+        return $this->pathRateLimitEnabled;
+    }
+
+    public function setPathRateLimitEnabled(bool $pathRateLimitEnabled): self
+    {
+        $this->pathRateLimitEnabled = $pathRateLimitEnabled;
+
+        return $this;
+    }
+
+    public function getPathRateLimitUriPattern(): string
+    {
+        return $this->pathRateLimitUriPattern;
+    }
+
+    public function setPathRateLimitUriPattern(string $pathRateLimitUriPattern): self
+    {
+        $pathRateLimitUriPattern = trim($pathRateLimitUriPattern);
+        if ('' === $pathRateLimitUriPattern) {
+            $pathRateLimitUriPattern = '/filtered';
+        }
+
+        $this->pathRateLimitUriPattern = $pathRateLimitUriPattern;
+
+        return $this;
+    }
+
+    public function getPathRateLimitMaxRequests(): int
+    {
+        return $this->pathRateLimitMaxRequests;
+    }
+
+    public function setPathRateLimitMaxRequests(int $pathRateLimitMaxRequests): self
+    {
+        if ($pathRateLimitMaxRequests < 1) {
+            $pathRateLimitMaxRequests = 1;
+        }
+
+        if ($pathRateLimitMaxRequests > 10000) {
+            $pathRateLimitMaxRequests = 10000;
+        }
+
+        $this->pathRateLimitMaxRequests = $pathRateLimitMaxRequests;
+
+        return $this;
+    }
+
+    public function getPathRateLimitWindowSeconds(): int
+    {
+        return $this->pathRateLimitWindowSeconds;
+    }
+
+    public function setPathRateLimitWindowSeconds(int $pathRateLimitWindowSeconds): self
+    {
+        if ($pathRateLimitWindowSeconds < 10) {
+            $pathRateLimitWindowSeconds = 10;
+        }
+
+        if ($pathRateLimitWindowSeconds > 3600) {
+            $pathRateLimitWindowSeconds = 3600;
+        }
+
+        $this->pathRateLimitWindowSeconds = $pathRateLimitWindowSeconds;
+
+        return $this;
+    }
+
+    public function getJsChallengeMinDelayMs(): int
+    {
+        return $this->jsChallengeMinDelayMs;
+    }
+
+    public function setJsChallengeMinDelayMs(int $jsChallengeMinDelayMs): self
+    {
+        if ($jsChallengeMinDelayMs < 500) {
+            $jsChallengeMinDelayMs = 500;
+        }
+
+        if ($jsChallengeMinDelayMs > 10000) {
+            $jsChallengeMinDelayMs = 10000;
+        }
+
+        $this->jsChallengeMinDelayMs = $jsChallengeMinDelayMs;
+
+        return $this;
+    }
+
+    public function isCatalogFilterPagesSoftCheck(): bool
+    {
+        return $this->catalogFilterPagesSoftCheck;
+    }
+
+    public function setCatalogFilterPagesSoftCheck(bool $catalogFilterPagesSoftCheck): self
+    {
+        $this->catalogFilterPagesSoftCheck = $catalogFilterPagesSoftCheck;
 
         return $this;
     }

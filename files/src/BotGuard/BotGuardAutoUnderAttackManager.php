@@ -12,7 +12,7 @@ use Symfony\Contracts\Cache\ItemInterface;
 class BotGuardAutoUnderAttackManager
 {
     private const STATE_CACHE_KEY = 'bot_guard.auto_under_attack.state';
-    private const SETTINGS_CACHE_KEY = 'bot_guard.settings.v1';
+    private const SETTINGS_CACHE_KEY = 'bot_guard.settings.v2';
 
     /**
      * @var EntityManagerInterface

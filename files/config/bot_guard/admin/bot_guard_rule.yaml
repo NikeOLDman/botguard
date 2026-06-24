@@ -1,6 +1,6 @@
 menu:
   group: bot_guard
-  position: 2020
+  position: 2021
 
 order_by:
   priority: asc
@@ -58,6 +58,7 @@ form:
             bot_guard_rule.type.ip_exact: ip_exact
             bot_guard_rule.type.uri_contains: uri_contains
             bot_guard_rule.type.cookie_required: cookie_required
+            bot_guard_rule.type.cookie_strict: cookie_strict
       name:
       pattern:
       uriPattern:
@@ -75,6 +76,7 @@ form:
             bot_guard_rule.type.ip_exact: ip_exact
             bot_guard_rule.type.uri_contains: uri_contains
             bot_guard_rule.type.cookie_required: cookie_required
+            bot_guard_rule.type.cookie_strict: cookie_strict
       pattern: ~
       uriPattern:
         options:
@@ -95,6 +97,7 @@ form:
             bot_guard_rule.type.ip_exact: ip_exact
             bot_guard_rule.type.uri_contains: uri_contains
             bot_guard_rule.type.cookie_required: cookie_required
+            bot_guard_rule.type.cookie_strict: cookie_strict
       pattern: ~
       uriPattern:
         options:

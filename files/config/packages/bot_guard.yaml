@@ -1,0 +1,21 @@
+# Bot Guard module — подключается автоматически (config/packages/*.yaml).
+# Для переноса на другой сайт: скопировать src/BotGuard, src/Entity/BotGuard,
+# src/EventSubscriber/BotGuard*, src/Controller/BotGuard*, config/bot_guard/, config/packages/bot_guard.yaml,
+# public/assets/bot-guard/, templates/admin/bot_guard/, миграции.
+
+framework:
+    translator:
+        paths:
+            - '%kernel.project_dir%/config/bot_guard/translations'
+
+darvin_admin:
+    sections:
+        App\Entity\BotGuard\BotGuardSettings: '%kernel.project_dir%/config/bot_guard/admin/bot_guard_settings.yaml'
+        App\Entity\BotGuard\BotGuardFormSettings: '%kernel.project_dir%/config/bot_guard/admin/bot_guard_form_settings.yaml'
+        App\Entity\BotGuard\BotGuardRule: '%kernel.project_dir%/config/bot_guard/admin/bot_guard_rule.yaml'
+        App\Entity\BotGuard\BotGuardLog: '%kernel.project_dir%/config/bot_guard/admin/bot_guard_log.yaml'
+
+    menu:
+        groups:
+            bot_guard:
+                position: 33

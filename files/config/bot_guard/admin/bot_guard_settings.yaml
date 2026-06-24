@@ -1,6 +1,6 @@
 menu:
   group: bot_guard
-  position: 2020
+  position: 2022
 
 order_by:
   id: asc
@@ -39,11 +39,27 @@ view:
       trustReferrer:
         size: xl
         type: checkbox
+      trustedReferrerDomains:
+        size: xxxl
       blockStatusCode:
         size: xl
       cookieWhitelistUserAgents:
         size: xxxl
       retentionDays:
+        size: xl
+      jsChallengeMinDelayMs:
+        size: xl
+      catalogFilterPagesSoftCheck:
+        size: xl
+        type: checkbox
+      pathRateLimitEnabled:
+        size: xl
+        type: checkbox
+      pathRateLimitUriPattern:
+        size: xl
+      pathRateLimitMaxRequests:
+        size: xl
+      pathRateLimitWindowSeconds:
         size: xl
       rateLimitEnabled:
         size: xl
@@ -83,6 +99,7 @@ form:
         compare_strict: false
       trustReferrer:
         compare_strict: false
+      trustedReferrerDomains:
       blockStatusCode:
       cookieWhitelistUserAgents:
       retentionDays:
@@ -96,6 +113,12 @@ form:
       blockStatusCode: ~
       cookieWhitelistUserAgents: ~
       retentionDays: ~
+      jsChallengeMinDelayMs: ~
+      catalogFilterPagesSoftCheck: ~
+      pathRateLimitEnabled: ~
+      pathRateLimitUriPattern: ~
+      pathRateLimitMaxRequests: ~
+      pathRateLimitWindowSeconds: ~
       rateLimitEnabled: ~
       rateLimitMaxRequests: ~
       rateLimitWindowSeconds: ~
@@ -112,6 +135,13 @@ form:
       loggingEnabled: ~
       underAttack: ~
       trustReferrer: ~
+      trustedReferrerDomains:
+        type: Symfony\Component\Form\Extension\Core\Type\TextareaType
+        options:
+          required: false
+          attr:
+            rows: 4
+            placeholder: "yandex.ru\nya.ru\ngoogle.com"
       blockStatusCode: ~
       cookieWhitelistUserAgents:
         type: Symfony\Component\Form\Extension\Core\Type\TextareaType
@@ -125,6 +155,27 @@ form:
           attr:
             min: 1
             max: 3650
+      jsChallengeMinDelayMs:
+        options:
+          attr:
+            min: 500
+            max: 10000
+      catalogFilterPagesSoftCheck: ~
+      pathRateLimitEnabled: ~
+      pathRateLimitUriPattern:
+        options:
+          attr:
+            placeholder: /filtered
+      pathRateLimitMaxRequests:
+        options:
+          attr:
+            min: 1
+            max: 10000
+      pathRateLimitWindowSeconds:
+        options:
+          attr:
+            min: 10
+            max: 3600
       rateLimitEnabled: ~
       rateLimitMaxRequests:
         options:

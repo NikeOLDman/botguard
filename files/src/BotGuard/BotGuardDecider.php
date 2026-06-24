@@ -19,8 +19,8 @@ class BotGuardDecider
     public const CHALLENGE_QUERY_PARAM = '_bgc';
 
     private const CACHE_TTL_SECONDS = 15;
-    private const SETTINGS_CACHE_KEY = 'bot_guard.settings.v1';
-    private const RULES_CACHE_KEY = 'bot_guard.rules.v1';
+    private const SETTINGS_CACHE_KEY = 'bot_guard.settings.v2';
+    private const RULES_CACHE_KEY = 'bot_guard.rules.v2';
 
     /**
      * @var EntityManagerInterface
@@ -31,15 +31,40 @@ class BotGuardDecider
      * @var CacheInterface|null
      */
     private $cache;
+
     /**
      * @var string
      */
     private $appSecret;
 
-    public function __construct(EntityManagerInterface $em, string $appSecret, ?CacheInterface $cache = null)
-    {
+    /**
+     * @var BotGuardReferrerMatcher
+     */
+    private $referrerMatcher;
+
+    /**
+     * @var BotGuardRateLimiter
+     */
+    private $rateLimiter;
+
+    /**
+     * @var BotGuardCatalogFilterPageRegistry
+     */
+    private $catalogFilterPages;
+
+    public function __construct(
+        EntityManagerInterface $em,
+        string $appSecret,
+        BotGuardReferrerMatcher $referrerMatcher,
+        BotGuardRateLimiter $rateLimiter,
+        BotGuardCatalogFilterPageRegistry $catalogFilterPages,
+        ?CacheInterface $cache = null
+    ) {
         $this->em = $em;
         $this->appSecret = $appSecret;
+        $this->referrerMatcher = $referrerMatcher;
+        $this->rateLimiter = $rateLimiter;
+        $this->catalogFilterPages = $catalogFilterPages;
         $this->cache = $cache;
     }
 
@@ -58,24 +83,39 @@ class BotGuardDecider
             return $this->allow($statusCode);
         }
 
+        if ($this->isWhitelistedForCookieCheck($settings, $userAgent)) {
+            return $this->allow($statusCode);
+        }
+
         if (!empty($settings['blockEmptyUserAgent']) && '' === trim($userAgent)) {
             return $this->deny('empty_user_agent', null, null, $statusCode);
         }
 
         if (!empty($settings['underAttack'])) {
-            $underAttackDecision = $this->decideUnderAttack($request, $settings, $statusCode);
+            $underAttackDecision = $this->decideStrictProtection($request, 'js_challenge_required', $statusCode);
 
             if (null !== $underAttackDecision) {
                 return $underAttackDecision;
             }
+
+            return $this->allow($statusCode);
         }
 
-        $cookieRulesMatched = [];
+        $softCookieRulesMatched = false;
+        $strictCookieRulesMatched = false;
         $rules = $this->getRulesData();
+
         foreach ($rules as $rule) {
+            if (BotGuardRule::TYPE_COOKIE_STRICT === $rule['type']) {
+                if ($this->matchesCookieRule($rule, $userAgent, $uri)) {
+                    $strictCookieRulesMatched = true;
+                }
+                continue;
+            }
+
             if (BotGuardRule::TYPE_COOKIE_REQUIRED === $rule['type']) {
                 if ($this->matchesCookieRule($rule, $userAgent, $uri)) {
-                    $cookieRulesMatched[] = $rule;
+                    $softCookieRulesMatched = true;
                 }
                 continue;
             }
@@ -85,14 +125,22 @@ class BotGuardDecider
             }
         }
 
-        if ($this->requiresCookieValidation($settings, $userAgent, $cookieRulesMatched)) {
-            if (!$this->hasValidAccessCookie($request)) {
-                if ($this->isChallengeRetry($request)) {
-                    return $this->deny('cookie_not_set', null, null, $statusCode);
-                }
-
-                return $this->challenge('cookie_required', $statusCode);
+        if ($strictCookieRulesMatched) {
+            if ($this->shouldUseSoftCheckForPath((string) $request->getPathInfo())) {
+                return $this->decideSoftCookieProtection($request, $statusCode);
             }
+
+            $strictDecision = $this->decideStrictProtection($request, 'cookie_strict', $statusCode);
+
+            if (null !== $strictDecision) {
+                return $strictDecision;
+            }
+
+            return $this->allow($statusCode);
+        }
+
+        if ($softCookieRulesMatched) {
+            return $this->decideSoftCookieProtection($request, $statusCode);
         }
 
         return $this->allow($statusCode);
@@ -110,7 +158,7 @@ class BotGuardDecider
     }
 
     /**
-     * @param array<string, mixed> $settings
+     * @param array<string, mixed>|null $settings
      */
     public function isRateLimitEnabled(array $settings = null): bool
     {
@@ -120,7 +168,7 @@ class BotGuardDecider
     }
 
     /**
-     * @param array<string, mixed> $settings
+     * @param array<string, mixed>|null $settings
      *
      * @return array{maxRequests:int,windowSeconds:int}
      */
@@ -134,9 +182,37 @@ class BotGuardDecider
         ];
     }
 
+    public function isPathRateLimitExceeded(Request $request): bool
+    {
+        $settings = $this->getSettingsData();
+
+        if (empty($settings['pathRateLimitEnabled'])) {
+            return false;
+        }
+
+        $pattern = trim((string) ($settings['pathRateLimitUriPattern'] ?? ''));
+        if ('' === $pattern || false === stripos((string) $request->getPathInfo(), $pattern)) {
+            return false;
+        }
+
+        if ($this->isUserAgentWhitelisted((string) $request->headers->get('User-Agent', ''))) {
+            return false;
+        }
+
+        return $this->rateLimiter->isExceeded(
+            $request,
+            'path:'.md5($pattern),
+            (int) $settings['pathRateLimitMaxRequests'],
+            (int) $settings['pathRateLimitWindowSeconds'],
+            true
+        );
+    }
+
     public function canCompleteJsChallenge(Request $request): bool
     {
-        return $this->isChallengeRetry($request) && $this->hasValidChallengeCookie($request);
+        return $this->isChallengeRetry($request)
+            && $this->hasValidJsChallengeCookie($request)
+            && $this->hasValidAccessCookie($request);
     }
 
     public function isUserAgentWhitelisted(string $userAgent): bool
@@ -144,25 +220,56 @@ class BotGuardDecider
         return $this->isWhitelistedByRawList((string) $this->getSettingsData()['cookieWhitelistUas'], $userAgent);
     }
 
-    /**
-     * Доверяем только внешнему referrer, чтобы не ослаблять защиту на внутренних переходах.
-     */
-    public function shouldSkipChallengeByReferrer(Request $request): bool
+    public function shouldSkipChallengeByReferrer(Request $request, string $challengeReason): bool
     {
-        $settings = $this->getSettingsData();
-
-        if (empty($settings['trustReferrer']) || !empty($settings['underAttack'])) {
+        if ('cookie_required' !== $challengeReason) {
             return false;
         }
 
-        return $this->hasExternalReferrer($request);
+        $settings = $this->getSettingsData();
+        $trustReferrer = !empty($settings['trustReferrer']);
+
+        if (
+            !$trustReferrer
+            && !empty($settings['catalogFilterPagesSoftCheck'])
+            && $this->catalogFilterPages->isCatalogFilterPagePath((string) $request->getPathInfo())
+        ) {
+            $trustReferrer = true;
+        }
+
+        return $this->referrerMatcher->isTrusted(
+            $request,
+            $trustReferrer,
+            (string) ($settings['trustedReferrerDomains'] ?? '')
+        );
     }
 
     public function isUnderAttackEnabled(): bool
     {
-        $settings = $this->getSettingsData();
+        return !empty($this->getSettingsData()['underAttack']);
+    }
 
-        return !empty($settings['underAttack']);
+    public function isStrictChallengeReason(string $reason): bool
+    {
+        return in_array($reason, ['cookie_strict', 'js_challenge_required'], true);
+    }
+
+    public function getJsChallengeMinDelayMs(): int
+    {
+        return max(500, (int) ($this->getSettingsData()['jsChallengeMinDelayMs'] ?? 1200));
+    }
+
+    public function shouldIssueGlobalAccessCookie(Request $request): bool
+    {
+        if ($this->isUnderAttackEnabled()) {
+            return false;
+        }
+
+        if ($this->hasValidAccessCookie($request)) {
+            return false;
+        }
+
+        return !$this->uriMatchesStrictCookieRule((string) $request->getPathInfo());
     }
 
     public function hasValidAccessCookie(Request $request): bool
@@ -192,11 +299,7 @@ class BotGuardDecider
             return false;
         }
 
-        if (!$this->isSignedPayloadValid($request, $decoded, 'access')) {
-            return false;
-        }
-
-        return true;
+        return $this->isSignedPayloadValid($request, $decoded, 'access');
     }
 
     public function hasValidJsChallengeCookie(Request $request): bool
@@ -224,6 +327,70 @@ class BotGuardDecider
         return $this->buildSignedCookieValue($request, 'challenge', 600);
     }
 
+    /**
+     * @return array{blocked: bool, challenge: bool, reason: ?string, ruleName: ?string, rulePattern: ?string, statusCode: int}|null
+     */
+    private function decideStrictProtection(Request $request, string $reason, int $statusCode): ?array
+    {
+        if ($this->hasValidAccessCookie($request) && $this->hasValidJsChallengeCookie($request)) {
+            return null;
+        }
+
+        if ($this->canCompleteJsChallenge($request)) {
+            return $this->allow($statusCode);
+        }
+
+        if ($this->isChallengeRetry($request)) {
+            return $this->deny('js_challenge_not_passed', null, null, $statusCode);
+        }
+
+        return $this->challenge($reason, $statusCode);
+    }
+
+    /**
+     * @return array{blocked: bool, challenge: bool, reason: ?string, ruleName: ?string, rulePattern: ?string, statusCode: int}
+     */
+    private function decideSoftCookieProtection(Request $request, int $statusCode): array
+    {
+        if ($this->hasValidAccessCookie($request)) {
+            return $this->allow($statusCode);
+        }
+
+        if ($this->isChallengeRetry($request)) {
+            return $this->deny('cookie_not_set', null, null, $statusCode);
+        }
+
+        return $this->challenge('cookie_required', $statusCode);
+    }
+
+    public function shouldUseSoftCheckForPath(string $pathInfo): bool
+    {
+        if (empty($this->getSettingsData()['catalogFilterPagesSoftCheck'])) {
+            return false;
+        }
+
+        return $this->catalogFilterPages->isCatalogFilterPagePath($pathInfo);
+    }
+
+    public function uriMatchesStrictCookieRule(string $uri): bool
+    {
+        if ($this->shouldUseSoftCheckForPath($uri)) {
+            return false;
+        }
+
+        foreach ($this->getRulesData() as $rule) {
+            if (BotGuardRule::TYPE_COOKIE_STRICT !== $rule['type']) {
+                continue;
+            }
+
+            if ($this->matchesCookieRule($rule, '', $uri)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function buildSignedCookieValue(Request $request, string $type, int $ttlSeconds): string
     {
         $expiresAt = time() + $ttlSeconds;
@@ -232,7 +399,7 @@ class BotGuardDecider
             't' => $type,
             'exp' => $expiresAt,
             'ua' => hash('sha256', mb_strtolower(trim((string) $request->headers->get('User-Agent', '')))),
-            'ip' => hash('sha256', $this->buildIpFingerprint((string) $request->getClientIp())),
+            'ip' => hash('sha256', BotGuardIpFingerprint::build((string) $request->getClientIp())),
             'rnd' => bin2hex(random_bytes(8)),
         ];
         $encoded = rtrim(strtr(base64_encode((string) json_encode($payload)), '+/', '-_'), '=');
@@ -294,7 +461,7 @@ class BotGuardDecider
             return false;
         }
 
-        $actualIpHash = hash('sha256', $this->buildIpFingerprint((string) $request->getClientIp()));
+        $actualIpHash = hash('sha256', BotGuardIpFingerprint::build((string) $request->getClientIp()));
         if (!hash_equals($ipHash, $actualIpHash)) {
             return false;
         }
@@ -303,50 +470,7 @@ class BotGuardDecider
     }
 
     /**
-     * @param array<string, mixed> $settings
-     *
-     * @return array{blocked: bool, challenge: bool, reason: ?string, ruleName: ?string, rulePattern: ?string, statusCode: int}|null
-     */
-    private function decideUnderAttack(Request $request, array $settings, int $statusCode): ?array
-    {
-        if ($this->hasValidAccessCookie($request) && $this->hasValidJsChallengeCookie($request)) {
-            return null;
-        }
-
-        if ($this->canCompleteJsChallenge($request)) {
-            return $this->allow($statusCode);
-        }
-
-        if ($this->isChallengeRetry($request)) {
-            return $this->deny('js_challenge_not_passed', null, null, $statusCode);
-        }
-
-        return $this->challenge('js_challenge_required', $statusCode);
-    }
-
-    private function buildIpFingerprint(string $ip): string
-    {
-        $ip = trim($ip);
-        if ('' === $ip) {
-            return 'no-ip';
-        }
-
-        if (false !== strpos($ip, ':')) {
-            $parts = explode(':', $ip);
-
-            return implode(':', array_slice($parts, 0, 4));
-        }
-
-        $parts = explode('.', $ip);
-        if (4 !== count($parts)) {
-            return $ip;
-        }
-
-        return $parts[0].'.'.$parts[1].'.'.$parts[2].'.0';
-    }
-
-    /**
-     * @return array{enabled: bool, blockEmptyUserAgent: bool, loggingEnabled: bool, underAttack: bool, trustReferrer: bool, cookieWhitelistUas: string, statusCode: int}
+     * @return array<string, mixed>
      */
     private function getSettingsData(): array
     {
@@ -356,11 +480,18 @@ class BotGuardDecider
             'loggingEnabled' => true,
             'underAttack' => false,
             'trustReferrer' => false,
+            'trustedReferrerDomains' => '',
             'cookieWhitelistUas' => '',
             'statusCode' => 403,
             'rateLimitEnabled' => true,
             'rateLimitMaxRequests' => 60,
             'rateLimitWindowSeconds' => 60,
+            'pathRateLimitEnabled' => true,
+            'pathRateLimitUriPattern' => '/filtered',
+            'pathRateLimitMaxRequests' => 30,
+            'pathRateLimitWindowSeconds' => 60,
+            'jsChallengeMinDelayMs' => 1200,
+            'catalogFilterPagesSoftCheck' => true,
             'reduceLoggingUnderAttack' => true,
             'autoUnderAttackEnabled' => false,
             'autoUnderAttackCpuPercent' => 95,
@@ -385,9 +516,9 @@ class BotGuardDecider
     }
 
     /**
-     * @param array{enabled: bool, blockEmptyUserAgent: bool, loggingEnabled: bool, underAttack: bool, trustReferrer: bool, cookieWhitelistUas: string, statusCode: int} $defaults
+     * @param array<string, mixed> $defaults
      *
-     * @return array{enabled: bool, blockEmptyUserAgent: bool, loggingEnabled: bool, underAttack: bool, trustReferrer: bool, cookieWhitelistUas: string, statusCode: int}
+     * @return array<string, mixed>
      */
     private function loadSettingsDataFromDatabase(array $defaults): array
     {
@@ -404,11 +535,18 @@ class BotGuardDecider
             'loggingEnabled' => $settings->isLoggingEnabled(),
             'underAttack' => $settings->isUnderAttack(),
             'trustReferrer' => $settings->isTrustReferrer(),
+            'trustedReferrerDomains' => (string) $settings->getTrustedReferrerDomains(),
             'cookieWhitelistUas' => (string) $settings->getCookieWhitelistUserAgents(),
             'statusCode' => $settings->getBlockStatusCode(),
             'rateLimitEnabled' => $settings->isRateLimitEnabled(),
             'rateLimitMaxRequests' => $settings->getRateLimitMaxRequests(),
             'rateLimitWindowSeconds' => $settings->getRateLimitWindowSeconds(),
+            'pathRateLimitEnabled' => $settings->isPathRateLimitEnabled(),
+            'pathRateLimitUriPattern' => $settings->getPathRateLimitUriPattern(),
+            'pathRateLimitMaxRequests' => $settings->getPathRateLimitMaxRequests(),
+            'pathRateLimitWindowSeconds' => $settings->getPathRateLimitWindowSeconds(),
+            'jsChallengeMinDelayMs' => $settings->getJsChallengeMinDelayMs(),
+            'catalogFilterPagesSoftCheck' => $settings->isCatalogFilterPagesSoftCheck(),
             'reduceLoggingUnderAttack' => $settings->isReduceLoggingUnderAttack(),
             'autoUnderAttackEnabled' => $settings->isAutoUnderAttackEnabled(),
             'autoUnderAttackCpuPercent' => $settings->getAutoUnderAttackCpuPercent(),
@@ -523,28 +661,7 @@ class BotGuardDecider
     }
 
     /**
-     * @param array{enabled: bool, blockEmptyUserAgent: bool, loggingEnabled: bool, underAttack: bool, cookieWhitelistUas: string, statusCode: int} $settings
-     * @param array<int,array{name: string, type: string, pattern: string, uriPattern: ?string}>                                 $cookieRulesMatched
-     */
-    private function requiresCookieValidation(array $settings, string $userAgent, array $cookieRulesMatched): bool
-    {
-        if (!empty($settings['underAttack'])) {
-            return true;
-        }
-
-        if ([] === $cookieRulesMatched) {
-            return false;
-        }
-
-        if ($this->isWhitelistedForCookieCheck($settings, $userAgent)) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * @param array{enabled: bool, blockEmptyUserAgent: bool, loggingEnabled: bool, underAttack: bool, cookieWhitelistUas: string, statusCode: int} $settings
+     * @param array<string, mixed> $settings
      */
     private function isWhitelistedForCookieCheck(array $settings, string $userAgent): bool
     {
@@ -575,26 +692,6 @@ class BotGuardDecider
         }
 
         return false;
-    }
-
-    private function hasExternalReferrer(Request $request): bool
-    {
-        $referrer = trim((string) $request->headers->get('referer', ''));
-        if ('' === $referrer) {
-            return false;
-        }
-
-        $referrerHost = parse_url($referrer, PHP_URL_HOST);
-        if (!is_string($referrerHost) || '' === trim($referrerHost)) {
-            return false;
-        }
-
-        return 0 !== strcasecmp($request->getHost(), $referrerHost);
-    }
-
-    private function hasAccessCookie(Request $request): bool
-    {
-        return $this->hasValidAccessCookie($request);
     }
 
     private function isChallengeRetry(Request $request): bool
@@ -656,4 +753,3 @@ class BotGuardDecider
         ];
     }
 }
-

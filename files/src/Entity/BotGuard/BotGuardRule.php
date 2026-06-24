@@ -18,6 +18,7 @@ class BotGuardRule
     public const TYPE_IP_EXACT = 'ip_exact';
     public const TYPE_URI_CONTAINS = 'uri_contains';
     public const TYPE_COOKIE_REQUIRED = 'cookie_required';
+    public const TYPE_COOKIE_STRICT = 'cookie_strict';
 
     /**
      * @var int|null

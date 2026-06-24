@@ -35,9 +35,18 @@ class BotGuardSettingsType extends AbstractType
                 'required' => false,
             ])
             ->add('trustReferrer', CheckboxType::class, [
-                'label' => 'Доверять внешнему referrer',
+                'label' => 'Доверять внешнему referrer (мягкая cookie-проверка)',
                 'required' => false,
-                'help' => 'В обычном режиме: cookie без редиректа при переходе с другого сайта. Не действует в режиме «Под атакой».',
+                'help' => 'Пропускает только переходы с доменов из списка ниже. Работает для мягкой cookie-проверки, включая страницы фильтров каталога.',
+            ])
+            ->add('trustedReferrerDomains', TextareaType::class, [
+                'label' => 'Домены доверенного referrer',
+                'required' => false,
+                'help' => 'По одному домену в строке. Пусто — встроенный список (yandex.ru, google.com, vk.com и др.).',
+                'attr' => [
+                    'rows' => 4,
+                    'placeholder' => "yandex.ru\nya.ru\ngoogle.com\nvk.com",
+                ],
             ])
             ->add('blockStatusCode', IntegerType::class, [
                 'label' => 'HTTP-код при блокировке',
@@ -50,11 +59,42 @@ class BotGuardSettingsType extends AbstractType
             ->add('cookieWhitelistUserAgents', TextareaType::class, [
                 'label' => 'Белый список User-Agent',
                 'required' => false,
-                'help' => 'По одному значению в строке или через запятую. Не применяется в режиме «Под атакой».',
+                'help' => 'По одному значению в строке или через запятую. Действует всегда, включая режим «Под атакой».',
                 'attr' => [
                     'rows' => 5,
                     'placeholder' => "YandexBot\nGooglebot\nbingbot",
                 ],
+            ])
+            ->add('jsChallengeMinDelayMs', IntegerType::class, [
+                'label' => 'Минимальная задержка JS-проверки (мс)',
+                'attr' => ['min' => 500, 'max' => 10000],
+                'help' => 'Сервер отклонит verify-запрос, если он пришёл раньше этого интервала после выдачи nonce.',
+            ])
+            ->add('catalogFilterPagesSoftCheck', CheckboxType::class, [
+                'label' => 'Мягкая проверка для страниц фильтров каталога',
+                'required' => false,
+                'help' => 'Страницы фильтров, созданные в каталоге в админке, проходят мягкую cookie-проверку вместо строгой JS для /filtered. Переходы из поиска на эти страницы пропускаются без челленджа.',
+            ])
+            ->add('pathRateLimitEnabled', CheckboxType::class, [
+                'label' => 'Rate limit для защищённых путей',
+                'required' => false,
+                'help' => 'Лимит по подсети /24, работает без режима «Под атакой».',
+            ])
+            ->add('pathRateLimitUriPattern', TextareaType::class, [
+                'label' => 'URI для path rate limit',
+                'required' => false,
+                'attr' => [
+                    'rows' => 2,
+                    'placeholder' => '/filtered',
+                ],
+            ])
+            ->add('pathRateLimitMaxRequests', IntegerType::class, [
+                'label' => 'Лимит запросов (path rate limit)',
+                'attr' => ['min' => 1, 'max' => 10000],
+            ])
+            ->add('pathRateLimitWindowSeconds', IntegerType::class, [
+                'label' => 'Окно path rate limit (сек)',
+                'attr' => ['min' => 10, 'max' => 3600],
             ])
             ->add('rateLimitEnabled', CheckboxType::class, [
                 'label' => 'Rate limit в режиме «Под атакой»',

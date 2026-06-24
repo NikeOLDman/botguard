@@ -93,8 +93,22 @@
                         <p class="bg-dash__detail">Порог CPU {{ s.autoUnderAttackCpuPercent }}% · RAM {{ s.autoUnderAttackMemPercent }}%</p>
                     {% endif %}
                 </div>
+                <div class="bg-dash__cell bg-dash__cell--{{ s.pathRateLimitEnabled ? 'on' : 'idle' }}" role="listitem">
+                    <p class="bg-dash__label">Path rate limit</p>
+                    <p class="bg-dash__value">
+                        <span class="bg-dash__signal bg-dash__signal--{{ s.pathRateLimitEnabled ? 'on' : 'neutral' }}" aria-hidden="true"></span>
+                        {% if s.pathRateLimitEnabled %}
+                            {{ s.pathRateLimitMaxRequests }} запр. / {{ s.pathRateLimitWindowSeconds }} с
+                        {% else %}
+                            Отключён
+                        {% endif %}
+                    </p>
+                    {% if s.pathRateLimitEnabled %}
+                        <p class="bg-dash__detail">По подсети /24 для {{ s.pathRateLimitUriPattern }}</p>
+                    {% endif %}
+                </div>
                 <div class="bg-dash__cell bg-dash__cell--idle" role="listitem">
-                    <p class="bg-dash__label">Rate limit</p>
+                    <p class="bg-dash__label">Rate limit (атака)</p>
                     <p class="bg-dash__value">
                         <span class="bg-dash__signal bg-dash__signal--{{ s.rateLimitEnabled and s.underAttack ? 'on' : 'neutral' }}" aria-hidden="true"></span>
                         {% if s.rateLimitEnabled %}
@@ -112,8 +126,10 @@
     </header>
 
     <div class="bg-note">
-        <b>Совет:</b> для поисковых роботов в обычном режиме добавьте их в белый список User-Agent
-        (<code>YandexBot</code>, <code>Googlebot</code>). В режиме «Под атакой» белый список не действует.
+        <b>Совет:</b> добавьте поисковых роботов в белый список User-Agent (<code>YandexBot</code>, <code>Googlebot</code>).
+        Белый список действует <b>всегда</b>, в том числе в режиме «Под атакой».
+        Для остальных <code>/filtered/</code> используйте тип правила <b>«Строгая JS-проверка»</b>.
+        Страницы фильтров каталога из админки автоматически получают мягкую проверку — включите «Доверять referrer» для корректной Метрики.
     </div>
 
     {{ form_start(form, {attr: {class: 'bg-form'}}) }}
@@ -139,7 +155,7 @@
                     <div class="bg-toggle__text">
                         {{ form_label(field, null, {label_attr: {class: 'bg-toggle__label'}}) }}
                         {% if name == 'trustReferrer' %}
-                            <div class="bg-toggle__help">В обычном режиме: cookie без редиректа при переходе с другого сайта. Не действует в режиме «Под атакой».</div>
+                            <div class="bg-toggle__help">Пропуск мягкой cookie-проверки при переходе с доменов из списка ниже. Работает для путей с мягкой проверкой.</div>
                         {% endif %}
                     </div>
                 </div>
@@ -152,14 +168,45 @@
     </section>
 
     <section class="bg-section">
-        <h2 class="bg-section__title">Cookie и поисковые боты</h2>
-        <p class="bg-section__hint">Настройки cookie-проверки вне режима «Под атакой». По одному User-Agent в строке.</p>
+        <h2 class="bg-section__title">Cookie, referrer и поисковые боты</h2>
+        <p class="bg-section__hint">Белый список UA действует всегда. Referrer — для мягкой cookie-проверки, в т.ч. на страницах фильтров каталога.</p>
+        <div class="bg-grid bg-grid--1" style="margin-bottom:14px;">
+            <div class="bg-field bg-toggle">
+                {{ form_widget(form.catalogFilterPagesSoftCheck) }}
+                <div class="bg-toggle__text">
+                    {{ form_label(form.catalogFilterPagesSoftCheck, null, {label_attr: {class: 'bg-toggle__label'}}) }}
+                    <div class="bg-toggle__help">Перебивает строгую JS-проверку для страниц фильтров, созданных в каталоге. Список URL берётся из CMS автоматически. Переходы из поиска (Яндекс, Google) на эти страницы пропускаются без челленджа для корректной Метрики.</div>
+                </div>
+            </div>
+        </div>
         <div class="bg-field">{{ form_row(form.cookieWhitelistUserAgents) }}</div>
+        <div class="bg-grid" style="margin-top:14px;">
+            <div class="bg-field">{{ form_row(form.trustedReferrerDomains) }}</div>
+            <div class="bg-field">{{ form_row(form.jsChallengeMinDelayMs) }}</div>
+        </div>
+    </section>
+
+    <section class="bg-section">
+        <h2 class="bg-section__title">Rate limit для защищённых путей</h2>
+        <p class="bg-section__hint">Работает без режима «Под атакой». Лимит считается по подсети /24.</p>
+        <div class="bg-grid bg-grid--1" style="margin-bottom:14px;">
+            <div class="bg-field bg-toggle">
+                {{ form_widget(form.pathRateLimitEnabled) }}
+                <div class="bg-toggle__text">
+                    {{ form_label(form.pathRateLimitEnabled, null, {label_attr: {class: 'bg-toggle__label'}}) }}
+                </div>
+            </div>
+        </div>
+        <div class="bg-grid">
+            <div class="bg-field">{{ form_row(form.pathRateLimitUriPattern) }}</div>
+            <div class="bg-field">{{ form_row(form.pathRateLimitMaxRequests) }}</div>
+            <div class="bg-field">{{ form_row(form.pathRateLimitWindowSeconds) }}</div>
+        </div>
     </section>
 
     <section class="bg-section">
         <h2 class="bg-section__title">Режим «Под атакой»</h2>
-        <p class="bg-section__hint">Усиленная защита: JS-челлендж, CAPTCHA, лимит запросов с одного IP.</p>
+        <p class="bg-section__hint">Усиленная защита: строгий JS-verify, CAPTCHA, лимит запросов с одного IP.</p>
         <div class="bg-grid bg-grid--1">
             {% for name in ['rateLimitEnabled', 'reduceLoggingUnderAttack'] %}
                 {% set field = attribute(form, name) %}

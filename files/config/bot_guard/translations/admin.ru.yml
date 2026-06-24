@@ -87,4 +87,32 @@ bot_guard_rule:
         user_agent_regex: User-Agent по регулярному выражению
         ip_exact: Точный IP
         uri_contains: URI содержит
-        cookie_required: Cookie-проверка для пути
+        cookie_required: Cookie-проверка для пути (мягкая)
+        cookie_strict: Строгая JS-проверка для пути
+
+bot_guard_form_settings:
+    action:
+        index:
+            title: Защита форм
+            link: Защита форм
+        new:
+            title: Настройки защиты форм
+            link: Добавить настройки
+        show:
+            title: Защита форм
+        edit:
+            title: Защита форм
+    entity:
+        id: ID
+        enabled: Защита форм включена
+        protect_checkout: Защищать checkout
+        min_fill_seconds: Мин. время заполнения (сек)
+        min_confirm_delay_ms: Задержка подтверждения (мс)
+        rate_limit_enabled: Rate limit форм
+        rate_limit_max_requests: Лимит с IP
+        rate_limit_window_seconds: Окно rate limit (сек)
+        blocked_names: Блок-лист имён
+        blocked_emails: Блок-лист email
+        check_honeypot: Проверять honeypot CMS
+        logging_enabled: Логировать блокировки
+        updated_at: Обновлено

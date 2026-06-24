@@ -1,0 +1,92 @@
+menu:
+  group: bot_guard
+  position: 2023
+
+order_by:
+  id: asc
+
+view:
+  edit:
+    template: 'admin/bot_guard/form_settings/edit.html.twig'
+  index:
+    template: 'admin/bot_guard/form_settings/index.html.twig'
+    fields:
+      id: ~
+      enabled:
+        size: xl
+        type: checkbox
+      protectCheckout:
+        size: xl
+        type: checkbox
+      minFillSeconds:
+        size: xl
+      minConfirmDelayMs:
+        size: xl
+      rateLimitEnabled:
+        size: xl
+        type: checkbox
+      rateLimitMaxRequests:
+        size: xl
+      rateLimitWindowSeconds:
+        size: xl
+      checkHoneypot:
+        size: xl
+        type: checkbox
+      loggingEnabled:
+        size: xl
+        type: checkbox
+      updatedAt:
+        size: xl
+        type: datetime
+
+form:
+  index:
+    fields:
+      enabled: ~
+      protectCheckout: ~
+      minFillSeconds: ~
+      minConfirmDelayMs: ~
+      rateLimitEnabled: ~
+      rateLimitMaxRequests: ~
+      rateLimitWindowSeconds: ~
+      checkHoneypot: ~
+      loggingEnabled: ~
+  edit:
+    fields:
+      enabled: ~
+      protectCheckout: ~
+      minFillSeconds:
+        options:
+          attr:
+            min: 1
+            max: 120
+      minConfirmDelayMs:
+        options:
+          attr:
+            min: 200
+            max: 5000
+      rateLimitEnabled: ~
+      rateLimitMaxRequests:
+        options:
+          attr:
+            min: 1
+            max: 1000
+      rateLimitWindowSeconds:
+        options:
+          attr:
+            min: 60
+            max: 86400
+      blockedNames:
+        type: Symfony\Component\Form\Extension\Core\Type\TextareaType
+        options:
+          required: false
+          attr:
+            rows: 4
+      blockedEmails:
+        type: Symfony\Component\Form\Extension\Core\Type\TextareaType
+        options:
+          required: false
+          attr:
+            rows: 4
+      checkHoneypot: ~
+      loggingEnabled: ~

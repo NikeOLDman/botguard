@@ -1,0 +1,102 @@
+{% set s = settings %}
+
+<style>
+    .bg-page{font-family:inherit;color:#1f2937;line-height:1.45}
+    .bg-page *{box-sizing:border-box}
+    .bg-head{margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #e8edf3}
+    .bg-head__brand{margin:0 0 6px;font-size:26px;font-weight:800;color:#1a4d7a}
+    .bg-head__desc{margin:0;font-size:14px;color:#64748b;max-width:760px}
+    .bg-section{background:#fff;border:1px solid #e6ebf2;border-radius:12px;padding:18px 20px;margin-bottom:14px}
+    .bg-section__title{margin:0 0 4px;font-size:16px;font-weight:700}
+    .bg-section__hint{margin:0 0 16px;font-size:13px;color:#64748b}
+    .bg-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 20px}
+    .bg-grid--1{grid-template-columns:1fr}
+    .bg-field{margin:0}
+    .bg-field label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+    .bg-field input[type="text"], .bg-field input[type="number"], .bg-field textarea{width:100%;padding:9px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:14px}
+    .bg-toggle{display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border:1px solid #eef2f7;border-radius:10px;background:#fafbfc}
+    .bg-toggle input[type="checkbox"]{width:18px;height:18px;margin:2px 0 0}
+    .bg-toggle__label{font-size:14px;font-weight:600;display:block}
+    .bg-toggle__help{font-size:12px;color:#64748b;margin-top:3px}
+    .bg-note{background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 14px;font-size:13px;color:#1e3a5f;margin-bottom:14px}
+    .bg-btn-save{display:inline-flex;padding:11px 22px;border:none;border-radius:8px;background:#55b764;color:#fff;font-size:14px;font-weight:600;cursor:pointer}
+    @media (max-width:768px){.bg-grid{grid-template-columns:1fr}}
+</style>
+
+<div class="bg-page">
+    <header class="bg-head">
+        <h1 class="bg-head__brand">Защита форм</h1>
+        <p class="bg-head__desc">
+            Подтверждение «не бот» перед отправкой заявок CMS. Работает для всех сайтов на Darvin CMS с формами <code>/{type}/submit</code>.
+            Цели Метрики и аналитика срабатывают только после успешной отправки — как и раньше.
+        </p>
+    </header>
+
+    <div class="bg-note">
+        Автоматически защищаются формы заявок (<code>feedback</code>, <code>banner</code>, <code>product</code>, отзывы и др.).
+        Операции корзины (добавить/удалить товар) не затрагиваются.
+    </div>
+
+    {{ form_start(form, {attr: {class: 'bg-form'}}) }}
+
+    <section class="bg-section">
+        <h2 class="bg-section__title">Основное</h2>
+        <div class="bg-grid bg-grid--1">
+            <div class="bg-field bg-toggle">
+                {{ form_widget(form.enabled) }}
+                <div>
+                    {{ form_label(form.enabled, null, {label_attr: {class: 'bg-toggle__label'}}) }}
+                    <div class="bg-toggle__help">Показывает overlay-подтверждение и проверяет токен на сервере.</div>
+                </div>
+            </div>
+            <div class="bg-field bg-toggle">
+                {{ form_widget(form.protectCheckout) }}
+                <div>
+                    {{ form_label(form.protectCheckout, null, {label_attr: {class: 'bg-toggle__label'}}) }}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="bg-section">
+        <h2 class="bg-section__title">Тайминги и лимиты</h2>
+        <div class="bg-grid">
+            <div class="bg-field">{{ form_row(form.minFillSeconds) }}</div>
+            <div class="bg-field">{{ form_row(form.minConfirmDelayMs) }}</div>
+            <div class="bg-field bg-toggle">
+                {{ form_widget(form.rateLimitEnabled) }}
+                <div>{{ form_label(form.rateLimitEnabled, null, {label_attr: {class: 'bg-toggle__label'}}) }}</div>
+            </div>
+            <div class="bg-field">{{ form_row(form.rateLimitMaxRequests) }}</div>
+            <div class="bg-field">{{ form_row(form.rateLimitWindowSeconds) }}</div>
+        </div>
+    </section>
+
+    <section class="bg-section">
+        <h2 class="bg-section__title">Блок-лист отправителей</h2>
+        <div class="bg-grid">
+            <div class="bg-field">{{ form_row(form.blockedNames) }}</div>
+            <div class="bg-field">{{ form_row(form.blockedEmails) }}</div>
+        </div>
+    </section>
+
+    <section class="bg-section">
+        <h2 class="bg-section__title">Дополнительно</h2>
+        <div class="bg-grid bg-grid--1">
+            <div class="bg-field bg-toggle">
+                {{ form_widget(form.checkHoneypot) }}
+                <div>{{ form_label(form.checkHoneypot, null, {label_attr: {class: 'bg-toggle__label'}}) }}</div>
+            </div>
+            <div class="bg-field bg-toggle">
+                {{ form_widget(form.loggingEnabled) }}
+                <div>{{ form_label(form.loggingEnabled, null, {label_attr: {class: 'bg-toggle__label'}}) }}</div>
+            </div>
+        </div>
+    </section>
+
+    <div style="margin-top:8px;">
+        {{ form_widget(form.save, {attr: {class: 'bg-btn-save'}}) }}
+    </div>
+
+    {{ form_end(form) }}
+</div>

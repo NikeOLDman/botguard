@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Twig;
 
 use App\BotGuard\BotGuardStatsProvider;
+use App\BotGuard\Form\BotGuardFormProtectionService;
 use App\Entity\BotGuard\BotGuardSettings;
 use Doctrine\ORM\EntityManagerInterface;
 use Twig\Extension\AbstractExtension;
@@ -22,10 +23,19 @@ class BotGuardExtension extends AbstractExtension
      */
     private $em;
 
-    public function __construct(BotGuardStatsProvider $statsProvider, EntityManagerInterface $em)
-    {
+    /**
+     * @var BotGuardFormProtectionService
+     */
+    private $formProtection;
+
+    public function __construct(
+        BotGuardStatsProvider $statsProvider,
+        EntityManagerInterface $em,
+        BotGuardFormProtectionService $formProtection
+    ) {
         $this->statsProvider = $statsProvider;
         $this->em = $em;
+        $this->formProtection = $formProtection;
     }
 
     public function getFunctions(): array
@@ -33,7 +43,16 @@ class BotGuardExtension extends AbstractExtension
         return [
             new TwigFunction('bot_guard_stats', [$this, 'getStats']),
             new TwigFunction('bot_guard_settings', [$this, 'getSettings']),
+            new TwigFunction('bot_guard_form_shield_config', [$this, 'getFormShieldConfig']),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getFormShieldConfig(): array
+    {
+        return $this->formProtection->getPublicConfig();
     }
 
     public function getSettings(): ?BotGuardSettings

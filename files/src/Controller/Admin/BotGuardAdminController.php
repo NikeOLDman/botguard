@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace App\Controller\Admin;
 
 use App\BotGuard\BotGuardLogCleaner;
+use App\BotGuard\BotGuardRulePatternValidator;
 use App\BotGuard\BotGuardSettingsCache;
+use App\Entity\BotGuard\BotGuardFormSettings;
 use App\Entity\BotGuard\BotGuardRule;
 use App\Entity\BotGuard\BotGuardSettings;
+use App\Form\Admin\BotGuardFormSettingsType;
 use App\Form\Admin\BotGuardSettingsType;
 use Doctrine\ORM\EntityManagerInterface;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
@@ -379,16 +382,10 @@ class BotGuardAdminController extends AbstractController
 
     private function assertRegexIsValid(string $pattern, int $rowNumber): void
     {
-        set_error_handler(static function (): bool {
-            return true;
-        });
-
         try {
-            if (false === preg_match($pattern, 'test')) {
-                throw new \RuntimeException(sprintf('В правиле #%d регулярное выражение pattern некорректно.', $rowNumber));
-            }
-        } finally {
-            restore_error_handler();
+            BotGuardRulePatternValidator::assertValid(BotGuardRule::TYPE_USER_AGENT_REGEX, $pattern);
+        } catch (\InvalidArgumentException $e) {
+            throw new \RuntimeException(sprintf('В правиле #%d %s', $rowNumber, $e->getMessage()), 0, $e);
         }
     }
 
@@ -405,6 +402,73 @@ class BotGuardAdminController extends AbstractController
     private function redirectToSettingsIndex(Request $request): RedirectResponse
     {
         return $this->redirectToRoute('admin_bot_guard_settings.'.$request->getLocale());
+    }
+
+    /**
+     * @Route("/admin/bot-guard-form-settings/panel", name="app_admin_bot_guard_form_settings_panel", methods={"GET"})
+     * @IsGranted("ROLE_ADMIN")
+     */
+    public function formSettingsPanel(Request $request, EntityManagerInterface $em): Response
+    {
+        $settings = $this->getOrCreateFormSettings($em);
+        $form = $this->createForm(BotGuardFormSettingsType::class, $settings, [
+            'action' => $this->generateUrl('app_admin_bot_guard_form_settings_save'),
+            'method' => 'POST',
+        ]);
+
+        return $this->render('admin/bot_guard/form_settings/page.html.twig', [
+            'settings' => $settings,
+            'form' => $form->createView(),
+        ]);
+    }
+
+    /**
+     * @Route("/admin/bot-guard-form-settings/save", name="app_admin_bot_guard_form_settings_save", methods={"POST"})
+     * @IsGranted("ROLE_ADMIN")
+     */
+    public function saveFormSettings(
+        Request $request,
+        EntityManagerInterface $em,
+        BotGuardSettingsCache $settingsCache
+    ): RedirectResponse {
+        $settings = $this->getOrCreateFormSettings($em);
+
+        $form = $this->createForm(BotGuardFormSettingsType::class, $settings);
+        $form->handleRequest($request);
+
+        if (!$form->isSubmitted() || !$form->isValid()) {
+            $this->addFlash('danger', 'Не удалось сохранить настройки защиты форм. Проверьте заполнение полей.');
+
+            return $this->redirectToFormSettingsIndex($request);
+        }
+
+        $em->flush();
+        $settingsCache->invalidate();
+
+        $this->addFlash('success', 'Настройки защиты форм сохранены.');
+
+        return $this->redirectToFormSettingsIndex($request);
+    }
+
+    private function getOrCreateFormSettings(EntityManagerInterface $em): BotGuardFormSettings
+    {
+        /** @var BotGuardFormSettings|null $settings */
+        $settings = $em->getRepository(BotGuardFormSettings::class)->findOneBy([], ['id' => 'ASC']);
+
+        if ($settings instanceof BotGuardFormSettings) {
+            return $settings;
+        }
+
+        $settings = new BotGuardFormSettings();
+        $em->persist($settings);
+        $em->flush();
+
+        return $settings;
+    }
+
+    private function redirectToFormSettingsIndex(Request $request): RedirectResponse
+    {
+        return $this->redirectToRoute('admin_bot_guard_form_settings.'.$request->getLocale());
     }
 }
 
