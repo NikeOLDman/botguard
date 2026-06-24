@@ -3,6 +3,8 @@ services:
         bind:
             $appSecret:               '%kernel.secret%'
 
+    Darvin\ECommerceBundle\Router\CatalogFilteredRouterInterface: '@darvin_ecommerce.catalog_filtered.router'
+
     App\Command\BotGuardCollectMetricsCommand:
         tags:
             - { name: 'console.command', command: 'app:bot-guard:collect-metrics' }
