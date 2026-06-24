@@ -4,6 +4,7 @@ services:
             $appSecret:               '%kernel.secret%'
 
     Darvin\ECommerceBundle\Router\CatalogFilteredRouterInterface: '@darvin_ecommerce.catalog_filtered.router'
+    Darvin\OrderBundle\Config\OrderConfigInterface: '@darvin_order.configuration'
 
     App\Command\BotGuardCollectMetricsCommand:
         tags:
