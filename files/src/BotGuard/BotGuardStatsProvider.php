@@ -8,6 +8,8 @@ use Doctrine\DBAL\Connection;
 
 class BotGuardStatsProvider
 {
+    private const SUSPICIOUS_FORM_REASON_EXCLUDE = "reason NOT LIKE 'form\\_%'";
+
     /**
      * @var Connection
      */
@@ -57,7 +59,7 @@ class BotGuardStatsProvider
             'topIp' => $topIps[0] ?? null,
             'topIps' => $topIps,
             'daily' => $this->safeDaily($days),
-            'suspiciousLast24h' => $this->safeInt('SELECT COUNT(*) FROM bot_guard_suspicious_event WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)'),
+            'suspiciousLast24h' => $this->safeInt('SELECT COUNT(*) FROM bot_guard_suspicious_event WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) AND '.self::SUSPICIOUS_FORM_REASON_EXCLUDE),
             'suspiciousTop' => $this->safeSuspiciousTop(10),
             'systemCurrent' => $this->safeSystemCurrent(),
             'systemRecent' => $this->safeSystemRecent(),
@@ -241,6 +243,7 @@ class BotGuardStatsProvider
                 DATE_FORMAT(MAX(created_at), '%%Y-%%m-%%d %%H:%%i:%%s') AS last_seen
             FROM bot_guard_suspicious_event
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+              AND ".self::SUSPICIOUS_FORM_REASON_EXCLUDE."
             GROUP BY COALESCE(ip, ''), COALESCE(user_agent, ''), COALESCE(reason, '')
             ORDER BY cnt DESC
             LIMIT %d
@@ -470,7 +473,7 @@ class BotGuardStatsProvider
         $maxCpuPercent = $this->normalizeLoadToPercent($maxLoad, $this->getCpuCores());
         $maxMem = ($row && null !== $row['max_mem_used_percent']) ? (float) $row['max_mem_used_percent'] : null;
         $blocked = $this->safeInt("SELECT COUNT(*) FROM bot_guard_log WHERE blocked_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)");
-        $suspicious = $this->safeInt("SELECT COUNT(*) FROM bot_guard_suspicious_event WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)");
+        $suspicious = $this->safeInt("SELECT COUNT(*) FROM bot_guard_suspicious_event WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR) AND ".self::SUSPICIOUS_FORM_REASON_EXCLUDE);
 
         return [
             'hasData' => null !== $maxLoad || null !== $maxMem,
