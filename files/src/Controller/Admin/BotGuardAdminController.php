@@ -7,6 +7,7 @@ namespace App\Controller\Admin;
 use App\BotGuard\BotGuardLogCleaner;
 use App\BotGuard\BotGuardRulePatternValidator;
 use App\BotGuard\BotGuardSettingsCache;
+use App\BotGuard\Form\BotGuardFormShieldTheme;
 use App\Entity\BotGuard\BotGuardFormSettings;
 use App\Entity\BotGuard\BotGuardRule;
 use App\Entity\BotGuard\BotGuardSettings;
@@ -441,6 +442,18 @@ class BotGuardAdminController extends AbstractController
 
             return $this->redirectToFormSettingsIndex($request);
         }
+
+        $customLogo = trim((string) $form->get('shieldLogoCustomUrl')->getData());
+        if ('' !== $customLogo) {
+            $settings->setShieldLogoUrl(BotGuardFormShieldTheme::resolveLogoUrl(
+                $customLogo,
+                BotGuardFormShieldTheme::LOGO_TVERDYNYA
+            ));
+        } else {
+            $settings->setShieldLogoUrl(null);
+        }
+
+        $settings->setShieldTheme(BotGuardFormShieldTheme::normalizeTheme($settings->getShieldTheme()));
 
         $em->flush();
         $settingsCache->invalidate();

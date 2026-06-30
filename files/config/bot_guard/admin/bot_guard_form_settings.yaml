@@ -35,6 +35,8 @@ view:
       loggingEnabled:
         size: xl
         type: checkbox
+      shieldTheme:
+        size: xl
       updatedAt:
         size: xl
         type: datetime

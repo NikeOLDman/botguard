@@ -81,6 +81,15 @@
     </section>
 
     <section class="bg-section">
+        <h2 class="bg-section__title">Внешний вид окна подтверждения</h2>
+        <p class="bg-section__hint">Логотип и цвета применяются к overlay «Я не робот» на сайте.</p>
+        <div class="bg-grid">
+            <div class="bg-field">{{ form_row(form.shieldLogoCustomUrl) }}</div>
+            <div class="bg-field">{{ form_row(form.shieldTheme) }}</div>
+        </div>
+    </section>
+
+    <section class="bg-section">
         <h2 class="bg-section__title">Дополнительно</h2>
         <div class="bg-grid bg-grid--1">
             <div class="bg-field bg-toggle">

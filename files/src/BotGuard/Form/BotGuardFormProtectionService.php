@@ -34,16 +34,23 @@ final class BotGuardFormProtectionService
      */
     private $rateLimiter;
 
+    /**
+     * @var string
+     */
+    private $siteTitle;
+
     public function __construct(
         BotGuardFormSettingsProvider $settings,
         BotGuardFormTokenService $tokenService,
         BotGuardFormBlocklistMatcher $blocklist,
-        BotGuardRateLimiter $rateLimiter
+        BotGuardRateLimiter $rateLimiter,
+        string $siteTitle = ''
     ) {
         $this->settings = $settings;
         $this->tokenService = $tokenService;
         $this->blocklist = $blocklist;
         $this->rateLimiter = $rateLimiter;
+        $this->siteTitle = $siteTitle;
     }
 
     public function isProtectedRequest(Request $request): bool
@@ -146,8 +153,12 @@ final class BotGuardFormProtectionService
             'tokenField' => BotGuardFormTokenService::TOKEN_FIELD,
             'issuedAtField' => BotGuardFormTokenService::ISSUED_AT_FIELD,
             'confirmedAtField' => BotGuardFormTokenService::CONFIRMED_AT_FIELD,
-            'logoUrl' => '/assets/images/bot-guard/logo.png',
-            'brandName' => 'Твердыня',
+            'logoUrl' => BotGuardFormShieldTheme::resolveLogoUrl(
+                isset($settings['shieldLogoUrl']) ? (string) $settings['shieldLogoUrl'] : null,
+                BotGuardFormShieldTheme::LOGO_TVERDYNYA
+            ),
+            'theme' => BotGuardFormShieldTheme::normalizeTheme($settings['shieldTheme'] ?? null),
+            'brandName' => '' !== $this->siteTitle ? $this->siteTitle : 'Сайт',
         ];
     }
 

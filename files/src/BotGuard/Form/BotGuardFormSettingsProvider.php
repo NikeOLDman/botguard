@@ -11,7 +11,7 @@ use Symfony\Contracts\Cache\ItemInterface;
 
 final class BotGuardFormSettingsProvider
 {
-    public const CACHE_KEY = 'bot_guard.form_settings.v1';
+    public const CACHE_KEY = 'bot_guard.form_settings.v2';
 
     private const CACHE_TTL_SECONDS = 15;
 
@@ -88,6 +88,8 @@ final class BotGuardFormSettingsProvider
             'blockedEmails' => '',
             'loggingEnabled' => true,
             'checkHoneypot' => true,
+            'shieldLogoUrl' => null,
+            'shieldTheme' => BotGuardFormShieldTheme::DEFAULT_THEME,
         ];
     }
 
@@ -117,6 +119,8 @@ final class BotGuardFormSettingsProvider
             'blockedEmails' => (string) $settings->getBlockedEmails(),
             'loggingEnabled' => $settings->isLoggingEnabled(),
             'checkHoneypot' => $settings->isCheckHoneypot(),
+            'shieldLogoUrl' => $settings->getShieldLogoUrl(),
+            'shieldTheme' => BotGuardFormShieldTheme::normalizeTheme($settings->getShieldTheme()),
         ];
     }
 }

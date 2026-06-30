@@ -100,6 +100,20 @@ class BotGuardFormSettings
     private $checkHoneypot = true;
 
     /**
+     * @var string|null
+     *
+     * @ORM\Column(name="shield_logo_url", type="string", length=255, nullable=true)
+     */
+    private $shieldLogoUrl;
+
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="shield_theme", type="string", length=16)
+     */
+    private $shieldTheme = 'blue';
+
+    /**
      * @var \DateTimeInterface|null
      *
      * @ORM\Column(type="datetime", nullable=true)
@@ -272,6 +286,30 @@ class BotGuardFormSettings
     public function setCheckHoneypot(bool $checkHoneypot): self
     {
         $this->checkHoneypot = $checkHoneypot;
+
+        return $this;
+    }
+
+    public function getShieldLogoUrl(): ?string
+    {
+        return $this->shieldLogoUrl;
+    }
+
+    public function setShieldLogoUrl(?string $shieldLogoUrl): self
+    {
+        $this->shieldLogoUrl = $shieldLogoUrl;
+
+        return $this;
+    }
+
+    public function getShieldTheme(): string
+    {
+        return $this->shieldTheme;
+    }
+
+    public function setShieldTheme(string $shieldTheme): self
+    {
+        $this->shieldTheme = \App\BotGuard\Form\BotGuardFormShieldTheme::normalizeTheme($shieldTheme);
 
         return $this;
     }

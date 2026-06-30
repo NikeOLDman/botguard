@@ -10,7 +10,7 @@ class BotGuardSettingsCache
 {
     public const CACHE_KEY = 'bot_guard.settings.v2';
     public const RULES_CACHE_KEY = 'bot_guard.rules.v2';
-    public const FORM_SETTINGS_CACHE_KEY = 'bot_guard.form_settings.v1';
+    public const FORM_SETTINGS_CACHE_KEY = 'bot_guard.form_settings.v2';
 
     /**
      * @var CacheInterface|null

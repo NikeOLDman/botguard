@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Form\Admin;
 
+use App\BotGuard\Form\BotGuardFormShieldTheme;
 use App\Entity\BotGuard\BotGuardFormSettings;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
+use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
@@ -68,6 +71,19 @@ class BotGuardFormSettingsType extends AbstractType
                 'label' => 'Логировать блокировки форм',
                 'required' => false,
             ])
+            ->add('shieldLogoCustomUrl', TextType::class, [
+                'label' => 'URL логотипа',
+                'required' => false,
+                'mapped' => false,
+                'data' => $this->resolveCustomLogoData($builder),
+                'help' => 'По умолчанию — логотип Твердыни. Путь от корня сайта (/assets/...) или полный URL. Размер отображения: до 64×64 px.',
+                'attr' => ['placeholder' => '/assets/images/my-logo.svg'],
+            ])
+            ->add('shieldTheme', ChoiceType::class, [
+                'label' => 'Цветовая схема',
+                'choices' => BotGuardFormShieldTheme::themeChoices(),
+                'help' => 'По умолчанию — синяя (как в оригинальной версии Bot Guard).',
+            ])
             ->add('save', SubmitType::class, [
                 'label' => 'Сохранить настройки',
             ]);
@@ -78,5 +94,20 @@ class BotGuardFormSettingsType extends AbstractType
         $resolver->setDefaults([
             'data_class' => BotGuardFormSettings::class,
         ]);
+    }
+
+    private function resolveCustomLogoData(FormBuilderInterface $builder): string
+    {
+        $settings = $builder->getData();
+        if (!$settings instanceof BotGuardFormSettings) {
+            return '';
+        }
+
+        $current = (string) $settings->getShieldLogoUrl();
+        if ('' === $current || BotGuardFormShieldTheme::LOGO_TVERDYNYA === $current) {
+            return '';
+        }
+
+        return $current;
     }
 }
