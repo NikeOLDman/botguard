@@ -2,6 +2,8 @@ services:
     _defaults:
         bind:
             $appSecret:               '%kernel.secret%'
+            # Without bind, nullable $cache stays null (several CacheInterface pools) and JS challenge verify fails.
+            Symfony\Contracts\Cache\CacheInterface $cache: '@cache.app'
 
     Darvin\ECommerceBundle\Router\CatalogFilteredRouterInterface: '@darvin_ecommerce.catalog_filtered.router'
     Darvin\OrderBundle\Config\OrderConfigInterface: '@darvin_order.configuration'

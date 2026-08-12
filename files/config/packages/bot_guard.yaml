@@ -1,7 +1,8 @@
 # Bot Guard module — подключается автоматически (config/packages/*.yaml).
 # Для переноса на другой сайт: скопировать src/BotGuard, src/Entity/BotGuard,
 # src/EventSubscriber/BotGuard*, src/Controller/BotGuard*, config/bot_guard/, config/packages/bot_guard.yaml,
-# public/assets/bot-guard/, templates/admin/bot_guard/, миграции.
+# public/assets/bot-guard/ (form-shield.js, ajax-html-guard.js), templates/admin/bot_guard/, миграции.
+# ajax-html-guard.js защищает AJAX-фильтр каталога без правок filter-smart.js.
 
 framework:
     translator:

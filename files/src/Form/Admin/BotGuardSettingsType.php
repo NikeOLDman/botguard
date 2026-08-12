@@ -73,7 +73,7 @@ class BotGuardSettingsType extends AbstractType
             ->add('catalogFilterPagesSoftCheck', CheckboxType::class, [
                 'label' => 'Мягкая проверка для страниц фильтров каталога',
                 'required' => false,
-                'help' => 'Страницы фильтров, созданные в каталоге в админке, проходят мягкую cookie-проверку вместо строгой JS для /filtered. Переходы из поиска на эти страницы пропускаются без челленджа.',
+                'help' => 'Все URL с /filtered/ (динамический фильтр и страницы из админки) проходят мягкую cookie-проверку вместо строгой JS. Иначе AJAX-фильтр получает HTML челленджа и ломает список товаров.',
             ])
             ->add('pathRateLimitEnabled', CheckboxType::class, [
                 'label' => 'Rate limit для защищённых путей',

@@ -92,6 +92,11 @@ class BotGuardDecider
         }
 
         if (!empty($settings['underAttack'])) {
+            // JS challenge on /filtered breaks the product filter; soft cookie check is enough.
+            if (false !== stripos($uri, '/filtered')) {
+                return $this->decideSoftCookieProtection($request, $statusCode);
+            }
+
             $underAttackDecision = $this->decideStrictProtection($request, 'js_challenge_required', $statusCode);
 
             if (null !== $underAttackDecision) {
@@ -367,6 +372,12 @@ class BotGuardDecider
     {
         if (empty($this->getSettingsData()['catalogFilterPagesSoftCheck'])) {
             return false;
+        }
+
+        // Dynamic filter URLs (/catalog/filtered/...) must use soft cookie check too —
+        // strict JS challenge returns HTML without .l-main and breaks AJAX filter UI.
+        if (false !== stripos($pathInfo, '/filtered')) {
+            return true;
         }
 
         return $this->catalogFilterPages->isCatalogFilterPagePath($pathInfo);
