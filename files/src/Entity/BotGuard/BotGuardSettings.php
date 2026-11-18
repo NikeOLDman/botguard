@@ -117,7 +117,7 @@ class BotGuardSettings
     private $jsChallengeMinDelayMs = 1200;
 
     /**
-     * Мягкая cookie-проверка для всех URL с /filtered/ и страниц фильтров из CMS (вместо strict JS).
+     * Мягкая проверка подготовленных CMS-страниц вне режима «Под атакой».
      *
      * @var bool
      *

@@ -41,7 +41,7 @@
     }
 
     function isSameOrigin(url) {
-        if (!url || url.charAt(0) === '/' || url.charAt(0) === '?') {
+        if (!url) {
             return true;
         }
         try {
@@ -69,7 +69,12 @@
         if (getMethod(input, init) !== 'GET') {
             return false;
         }
-        return url.indexOf(pathNeedle) !== -1;
+        // Price-only filters and clearing the last selection use the base URL.
+        var headers = init && init.headers ? init.headers : input && input.headers;
+        var catalog = headers && (typeof headers.get === 'function'
+            ? headers.get('X-Bot-Guard-Catalog')
+            : headers['X-Bot-Guard-Catalog']);
+        return catalog === '1' || url.indexOf(pathNeedle) !== -1;
     }
 
     function headerLooksLikeChallenge(response) {
@@ -87,40 +92,40 @@
 
     function bodyLooksLikeChallenge(html) {
         if (!html || typeof html !== 'string') {
-            return true;
-        }
-
-        if (html.indexOf(challengeMarker) !== -1) {
-            return true;
-        }
-
-        if (html.indexOf(captchaField) !== -1) {
-            return true;
-        }
-
-        var normalized = html.toLowerCase();
-        var looksLikeDocument =
-            normalized.indexOf('<!doctype') !== -1 ||
-            normalized.indexOf('<html') !== -1;
-
-        if (!looksLikeDocument) {
             return false;
         }
 
-        // Full HTML page without catalogue root — challenge / deny / error shell.
-        return normalized.indexOf(mainMarker) === -1;
-    }
-
-    function triggerReload() {
-        try {
-            window.location.reload();
-        } catch (e) {
-            window.location.href = window.location.href;
+        // Catalog HTML contains these marker names in window.__bgAjaxHtmlGuard.
+        // Match rendered elements, not strings inside the configuration script.
+        var match;
+        var classes = /<[a-z][^>]*\sclass\s*=\s*["']([^"']*)["']/gi;
+        while ((match = classes.exec(html))) {
+            if (match[1].split(/\s+/).indexOf(challengeMarker) !== -1) return true;
         }
+        var fields = /<input\b[^>]*\sname\s*=\s*["']([^"']*)["']/gi;
+        while ((match = fields.exec(html))) {
+            if (match[1] === captchaField) return true;
+        }
+
+        return false;
     }
 
-    function hangForever() {
-        return new Promise(function () {});
+    function triggerReload(url) {
+        var key = 'bot_guard.last_challenge_navigation';
+        try {
+            var previous = JSON.parse(window.sessionStorage.getItem(key) || 'null');
+            if (previous && previous.url === url && Date.now() - previous.time < 30000) {
+                throw new Error('Проверка не завершена. Обновите страницу вручную.');
+            }
+            window.sessionStorage.setItem(key, JSON.stringify({url:url, time:Date.now()}));
+        } catch (error) {
+            if (error.message === 'Проверка не завершена. Обновите страницу вручную.') throw error;
+        }
+        // Preserve the requested filter and campaign parameters through verification.
+        window.location.assign(url);
+        var error = new Error('Выполняется проверка браузера.');
+        error.name = 'BotGuardNavigation';
+        throw error;
     }
 
     window.fetch = function (input, init) {
@@ -130,9 +135,18 @@
         }
 
         return nativeFetch(input, init).then(function (response) {
+            if (!response.ok) {
+                var seconds = parseInt(response.headers.get('Retry-After') || '60', 10);
+                var message = response.status === 429
+                    ? 'Слишком много запросов. Повторите через ' + (isFinite(seconds) ? seconds : 60) + ' сек.'
+                    : 'Не удалось обновить каталог. Повторите запрос позже.';
+                var error = new Error(message);
+                error.status = response.status;
+                error.retryAfter = seconds;
+                throw error;
+            }
             if (headerLooksLikeChallenge(response)) {
-                triggerReload();
-                return hangForever();
+                triggerReload(url);
             }
 
             var contentType = '';
@@ -151,12 +165,8 @@
                 .text()
                 .then(function (body) {
                     if (bodyLooksLikeChallenge(body)) {
-                        triggerReload();
-                        return hangForever();
+                        triggerReload(url);
                     }
-                    return response;
-                })
-                .catch(function () {
                     return response;
                 });
         });

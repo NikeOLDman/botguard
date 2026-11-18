@@ -1,0 +1,16 @@
+# BotGuard: не писать access_log для URI с /filtered/ (атаки каталога).
+#
+# 1) Положите map в conf.d (один раз на сервер):
+#    /etc/nginx/conf.d/bot_guard_access_log_map.conf
+#
+# map $request_uri $bot_guard_access_log {
+#     default 1;
+#     ~*/filtered/ 0;
+# }
+#
+# 2) В server { } сайта замените обычный access_log на:
+#
+# access_log /var/log/nginx/site_access.log main if=$bot_guard_access_log;
+#
+# Не используйте отдельный location ~* /filtered/ только ради access_log off:
+# internal redirect на index.php всё равно попадёт в php-location с общим логом.

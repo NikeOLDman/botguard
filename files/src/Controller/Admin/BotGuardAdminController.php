@@ -64,7 +64,7 @@ class BotGuardAdminController extends AbstractController
         if (!$form->isSubmitted() || !$form->isValid()) {
             $this->addFlash('danger', 'Не удалось сохранить настройки защиты сайта. Проверьте заполнение полей.');
 
-            return $this->redirectToSettingsIndex($request);
+            return $this->redirectToSettingsIndex();
         }
 
         $em->flush();
@@ -72,7 +72,7 @@ class BotGuardAdminController extends AbstractController
 
         $this->addFlash('success', 'Настройки «Твердыня» сохранены. Изменения применятся в течение ~15 секунд.');
 
-        return $this->redirectToSettingsIndex($request);
+        return $this->redirectToSettingsIndex();
     }
 
     /**
@@ -400,9 +400,10 @@ class BotGuardAdminController extends AbstractController
         return $this->redirectToRoute('darvin_admin_homepage');
     }
 
-    private function redirectToSettingsIndex(Request $request): RedirectResponse
+    private function redirectToSettingsIndex(): RedirectResponse
     {
-        return $this->redirectToRoute('admin_bot_guard_settings.'.$request->getLocale());
+        // Symfony resolves localized variants itself; admin routes may also be unlocalized.
+        return $this->redirectToRoute('admin_bot_guard_settings');
     }
 
     /**
@@ -440,7 +441,7 @@ class BotGuardAdminController extends AbstractController
         if (!$form->isSubmitted() || !$form->isValid()) {
             $this->addFlash('danger', 'Не удалось сохранить настройки защиты форм. Проверьте заполнение полей.');
 
-            return $this->redirectToFormSettingsIndex($request);
+            return $this->redirectToFormSettingsIndex();
         }
 
         $customLogo = trim((string) $form->get('shieldLogoCustomUrl')->getData());
@@ -460,7 +461,7 @@ class BotGuardAdminController extends AbstractController
 
         $this->addFlash('success', 'Настройки защиты форм сохранены.');
 
-        return $this->redirectToFormSettingsIndex($request);
+        return $this->redirectToFormSettingsIndex();
     }
 
     private function getOrCreateFormSettings(EntityManagerInterface $em): BotGuardFormSettings
@@ -479,9 +480,9 @@ class BotGuardAdminController extends AbstractController
         return $settings;
     }
 
-    private function redirectToFormSettingsIndex(Request $request): RedirectResponse
+    private function redirectToFormSettingsIndex(): RedirectResponse
     {
-        return $this->redirectToRoute('admin_bot_guard_form_settings.'.$request->getLocale());
+        return $this->redirectToRoute('admin_bot_guard_form_settings');
     }
 }
 

@@ -1,0 +1,11 @@
+# BotGuard: лимит на /_bot-guard/verify (один раз у человека, спам у ботов).
+#
+# 1) conf.d:
+# limit_req_zone $binary_remote_addr zone=botguard_verify:10m rate=3r/m;
+#
+# 2) внутри server{} сайта (перед location /):
+# location = /_bot-guard/verify {
+#     limit_req zone=botguard_verify burst=2 nodelay;
+#     limit_req_status 429;
+#     try_files $uri /index.php$is_args$args;
+# }

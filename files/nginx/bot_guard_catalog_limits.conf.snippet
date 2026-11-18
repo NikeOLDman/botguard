@@ -1,0 +1,49 @@
+# FOR HOSTING SUPPORT. Review and test with nginx -t before activation.
+# The vhost belongs to the hosting provider; this file is not installed by deploy.
+# http {} scope. Maintain a validated CIDR/IP file outside the web account's write access.
+# Include Google's official crawler ranges and forward-confirmed Yandex/Google IPs.
+# Never set this flag from a User-Agent, query parameter, or client-supplied header.
+geo $botguard_site_verified_crawler {
+    default 0;
+    include /etc/nginx/botguard/botguard_site-verified-crawlers.geo;
+}
+
+map "$botguard_site_verified_crawler:$uri" $botguard_site_catalog_client {
+    default "";
+    ~^0:/.*/filtered(?:/|$) $binary_remote_addr;
+    ~^0:/search(?:/|$) $binary_remote_addr;
+}
+limit_req_zone $botguard_site_catalog_client zone=botguard_site_catalog_rate:10m rate=2r/s;
+limit_conn_zone $botguard_site_catalog_client zone=botguard_site_catalog_connections:10m;
+
+# A distributed botnet rotates IPs: a per-IP zone alone is insufficient.
+# Verified crawlers retain their exemption; tune the public budget with account CPU.
+map $botguard_site_catalog_client $botguard_site_catalog_public {
+    "" "";
+    default "botguard_site-public-catalog";
+}
+limit_req_zone $botguard_site_catalog_public zone=botguard_site_catalog_total:1m rate=10r/s;
+limit_conn_zone $botguard_site_catalog_public zone=botguard_site_catalog_total_connections:1m;
+
+# server {} scope. Empty keys (including verified robots and static assets)
+# are not accounted for by these zones. Preserve the existing proxy/PHP config.
+limit_req zone=botguard_site_catalog_rate burst=10 nodelay;
+limit_req zone=botguard_site_catalog_total burst=40 nodelay;
+limit_req_status 429;
+limit_conn botguard_site_catalog_connections 5;
+limit_conn botguard_site_catalog_total_connections 12;
+limit_conn_status 429;
+
+location ~* ^/(?:wp-admin|wp-content|wp-includes|wordpress)(?:/|$) {
+    return 404;
+}
+location ~* ^/(?:wp-login\.php|xmlrpc\.php)$ {
+    return 404;
+}
+location ~ (^|/)(?:\.git|\.env(?:\.[^/]*)?)(?:/|$) {
+    return 404;
+}
+
+# Suggested access-log fields: $request_time $upstream_response_time
+# $upstream_status $limit_req_status $limit_conn_status.
+# Configure real client IP only for the actual hosting reverse proxies.

@@ -8,6 +8,8 @@ use App\BotGuard\BotGuardDecider;
 use App\BotGuard\BotGuardIpFingerprint;
 use App\BotGuard\BotGuardJsChallengeService;
 use App\BotGuard\BotGuardRateLimiter;
+use App\BotGuard\BotGuardResponse;
+use App\BotGuard\BotGuardRequestPolicy;
 use App\Entity\BotGuard\BotGuardLog;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
@@ -30,13 +32,6 @@ class BotGuardSubscriber implements EventSubscriberInterface
     private const ACCESS_COOKIE_LIFETIME_SECONDS = 2592000;
     private const REQUEST_ATTR_SET_ACCESS_COOKIE = '_bot_guard_set_access_cookie';
     private const CAPTCHA_QUERY_PARAM = '_bgcc';
-    private const CAPTCHA_TOKEN_FIELD = '_bgct';
-    private const CAPTCHA_ANSWER_FIELD = '_bgca';
-    private const CAPTCHA_TTL_SECONDS = 300;
-    private const CAPTCHA_RATE_LIMIT_PREFIX = 'bot_guard.captcha_rate.';
-    private const CAPTCHA_BASE_DELAY_SECONDS = 5;
-    private const CAPTCHA_MAX_DELAY_SECONDS = 900;
-    private const CAPTCHA_STATE_TTL_SECONDS = 7200;
     private const REQUEST_ATTR_COMPLETE_JS_CHALLENGE = '_bot_guard_complete_js_challenge';
     private $decider;
 
@@ -68,6 +63,7 @@ class BotGuardSubscriber implements EventSubscriberInterface
      * @var BotGuardRateLimiter
      */
     private $rateLimiter;
+    private $requestPolicy;
 
     public function __construct(
         BotGuardDecider $decider,
@@ -76,6 +72,7 @@ class BotGuardSubscriber implements EventSubscriberInterface
         string $appSecret,
         BotGuardJsChallengeService $jsChallenge,
         BotGuardRateLimiter $rateLimiter,
+        BotGuardRequestPolicy $requestPolicy,
         ?CacheInterface $cache = null
     )
     {
@@ -85,6 +82,7 @@ class BotGuardSubscriber implements EventSubscriberInterface
         $this->appSecret = $appSecret;
         $this->jsChallenge = $jsChallenge;
         $this->rateLimiter = $rateLimiter;
+        $this->requestPolicy = $requestPolicy;
         $this->cache = $cache;
     }
 
@@ -104,28 +102,50 @@ class BotGuardSubscriber implements EventSubscriberInterface
 
         $request = $event->getRequest();
 
-        if (0 === strpos((string) $request->getPathInfo(), '/admin')) {
+        if ($this->requestPolicy->isIntegration($request)) {
             return;
         }
 
-        if (0 === strpos((string) $request->getPathInfo(), '/_bot-guard')) {
+        $query = $request->query->all();
+        foreach ([BotGuardDecider::CHALLENGE_QUERY_PARAM, self::CAPTCHA_QUERY_PARAM] as $flag) {
+            if (isset($query[$flag]) && !is_scalar($query[$flag])) {
+                $event->setResponse(new Response('Некорректные параметры запроса.', 400, ['Content-Type' => 'text/plain; charset=UTF-8', 'Cache-Control' => 'no-store']));
+
+                return;
+            }
+        }
+
+        if ($this->isPathWithin($request, '/admin')) {
+            if ($request->isMethod('POST') && in_array(rtrim($request->getPathInfo(), '/'), ['/admin/login', '/admin/login/check'], true)) {
+                if ($this->rateLimiter->isExceeded($request, 'admin_login', 15, 60, false)) {
+                    $event->setResponse(BotGuardResponse::rateLimited($request));
+                }
+            }
+            return;
+        }
+
+        if ($this->isPathWithin($request, '/_bot-guard')) {
+            if ($this->rateLimiter->isExceeded($request, 'bot_guard_endpoint', 30, 60, false)) {
+                $event->setResponse(BotGuardResponse::rateLimited($request));
+            }
             return;
         }
 
         if ($this->decider->isPathRateLimitExceeded($request)) {
-            $event->setResponse(new Response('', Response::HTTP_TOO_MANY_REQUESTS));
+            $event->setResponse(BotGuardResponse::rateLimited($request));
 
             return;
         }
 
         if ($this->isRateLimitExceeded($request)) {
-            $event->setResponse(new Response('', Response::HTTP_TOO_MANY_REQUESTS));
+            $event->setResponse(BotGuardResponse::rateLimited($request));
 
             return;
         }
 
         if ($this->isCaptchaAttempt($request)) {
-            $event->setResponse($this->handleCaptchaAttempt($request));
+            // The old arithmetic CAPTCHA must not bypass proof of work.
+            $event->setResponse($this->createStrictJsChallengeResponse($request));
 
             return;
         }
@@ -148,8 +168,10 @@ class BotGuardSubscriber implements EventSubscriberInterface
             }
         }
 
-        if ($this->isUnderAttackEnabled() && 'js_challenge_not_passed' === (string) ($decision['reason'] ?? '')) {
-            $event->setResponse($this->createCaptchaChallengeResponse($request, false));
+        // A legacy _bgc=1 URL also needs proof when a strict rule is active
+        // outside global under-attack mode. Do not strand it on an empty 403.
+        if ('js_challenge_not_passed' === (string) ($decision['reason'] ?? '')) {
+            $event->setResponse($this->createStrictJsChallengeResponse($request));
 
             return;
         }
@@ -178,7 +200,11 @@ class BotGuardSubscriber implements EventSubscriberInterface
             $statusCode = Response::HTTP_FORBIDDEN;
         }
 
-        $event->setResponse(new Response('', $statusCode));
+        $headers = ['Cache-Control' => 'no-store, private'];
+        if (503 === $statusCode) {
+            $headers['Retry-After'] = '60';
+        }
+        $event->setResponse(new Response('', $statusCode, $headers));
     }
 
     public function onKernelResponse(ResponseEvent $event): void
@@ -189,11 +215,20 @@ class BotGuardSubscriber implements EventSubscriberInterface
 
         $request = $event->getRequest();
 
-        if (0 === strpos((string) $request->getPathInfo(), '/admin')) {
+        // Public XML/text and readiness responses must remain free of access cookies.
+        if (BotGuardRequestPolicy::isSeoFile($request) || 'readiness' === $event->getResponse()->headers->get('X-Bot-Guard')) {
             return;
         }
 
-        if (0 === strpos((string) $request->getPathInfo(), '/_bot-guard')) {
+        if ($this->requestPolicy->isIntegration($request)) {
+            return;
+        }
+
+        if ($this->isPathWithin($request, '/admin')) {
+            return;
+        }
+
+        if ($this->isPathWithin($request, '/_bot-guard')) {
             return;
         }
 
@@ -221,6 +256,11 @@ class BotGuardSubscriber implements EventSubscriberInterface
         }
 
         $event->getResponse()->headers->setCookie($this->createAccessCookie($request));
+    }
+
+    private function isPathWithin(Request $request, string $prefix): bool
+    {
+        return $prefix === $request->getPathInfo() || 0 === strpos($request->getPathInfo(), $prefix.'/');
     }
 
     private function isMainRequest($event): bool
@@ -254,12 +294,12 @@ class BotGuardSubscriber implements EventSubscriberInterface
             }
 
             return [
-                'blocked' => false,
+                'blocked' => true,
                 'challenge' => false,
-                'reason' => null,
+                'reason' => 'protection_unavailable',
                 'ruleName' => null,
                 'rulePattern' => null,
-                'statusCode' => Response::HTTP_FORBIDDEN,
+                'statusCode' => Response::HTTP_SERVICE_UNAVAILABLE,
             ];
         }
     }
@@ -278,6 +318,11 @@ class BotGuardSubscriber implements EventSubscriberInterface
      */
     private function shouldLogBlockedRequest(Request $request, array $decision): bool
     {
+        $probe = Request::create('/', 'GET', [], [], [], ['REMOTE_ADDR' => (string) $request->getClientIp()]);
+        if ($this->rateLimiter->isExceeded($probe, 'blocked_log', 2, 60, false)
+            || $this->rateLimiter->consume($probe, 'blocked_log_total', 'all', 60, 60)) {
+            return false;
+        }
         if (null === $this->cache) {
             return true;
         }
@@ -310,13 +355,19 @@ class BotGuardSubscriber implements EventSubscriberInterface
     private function logSuspiciousUnblockedRequest(Request $request): void
     {
         $userAgent = (string) $request->headers->get('User-Agent', '');
-        if ($this->isUserAgentWhitelistedSafely($userAgent)) {
+        if ($this->decider->isRequestWhitelisted($request)) {
             return;
         }
 
         $reason = $this->detectSuspiciousReason($request);
 
         if (null === $reason) {
+            return;
+        }
+
+        $probe = Request::create('/', 'GET', [], [], [], ['REMOTE_ADDR' => (string) $request->getClientIp()]);
+        if ($this->rateLimiter->isExceeded($probe, 'suspicious_log', 2, 60, false)
+            || $this->rateLimiter->consume($probe, 'suspicious_log_total', 'all', 60, 60)) {
             return;
         }
 
@@ -409,15 +460,6 @@ class BotGuardSubscriber implements EventSubscriberInterface
         return null;
     }
 
-    private function isUserAgentWhitelistedSafely(string $userAgent): bool
-    {
-        try {
-            return $this->decider->isUserAgentWhitelisted($userAgent);
-        } catch (\Throwable $e) {
-            return false;
-        }
-    }
-
     /**
      * @param array{blocked: bool, challenge: bool, reason: ?string, ruleName: ?string, rulePattern: ?string, statusCode: int} $decision
      */
@@ -486,11 +528,9 @@ class BotGuardSubscriber implements EventSubscriberInterface
 
     private function createStrictJsChallengeResponse(Request $request): Response
     {
-        $returnPath = $request->getPathInfo();
-        $queryString = $request->getQueryString();
-        if (null !== $queryString && '' !== $queryString) {
-            $returnPath .= '?'.$queryString;
-        }
+        // Preserve query order/encoding so the browser can reload the same history
+        // entry and keep its original search/ad referrer after verification.
+        $returnPath = $request->getRequestUri();
 
         $issued = $this->jsChallenge->issue($request, $returnPath, $this->decider->getJsChallengeMinDelayMs());
         $html = $this->jsChallenge->buildChallengeHtml(
@@ -504,26 +544,9 @@ class BotGuardSubscriber implements EventSubscriberInterface
             'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
             'Pragma' => 'no-cache',
             'Expires' => '0',
+            // Used by public/assets/bot-guard/ajax-html-guard.js for filter fetch().
+            'X-Bot-Guard' => 'challenge',
         ]);
-    }
-
-    private function createCaptchaChallengeResponse(Request $request, bool $showError, string $customError = ''): Response
-    {
-        $action = htmlspecialchars($this->buildCaptchaTarget($request), ENT_QUOTES, 'UTF-8');
-        $challenge = $this->buildCaptchaChallenge($request);
-        $question = htmlspecialchars($challenge['question'], ENT_QUOTES, 'UTF-8');
-        $token = htmlspecialchars($challenge['token'], ENT_QUOTES, 'UTF-8');
-        $errorText = '' !== trim($customError) ? $customError : 'Не удалось пройти CAPTCHA. Попробуйте еще раз.';
-        $errorHtml = $showError ? '<p style="color:#b50000;margin:12px 0 0;">'.htmlspecialchars($errorText, ENT_QUOTES, 'UTF-8').'</p>' : '';
-        $html = '<!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Проверка безопасности</title></head><body style="font-family:Arial,sans-serif;margin:24px;"><h1 style="font-size:20px;margin:0 0 12px;">Проверка безопасности</h1><p style="margin:0 0 16px;">Обнаружена повышенная активность. Подтвердите, что вы не робот.</p><form method="post" action="'.$action.'"><label style="display:block;margin:0 0 8px;">'.$question.'</label><input type="text" name="'.self::CAPTCHA_ANSWER_FIELD.'" autocomplete="off" required style="padding:8px;min-width:220px;"><input type="hidden" name="'.self::CAPTCHA_TOKEN_FIELD.'" value="'.$token.'"><button type="submit" style="margin-top:16px;padding:10px 16px;cursor:pointer;">Продолжить</button></form>'.$errorHtml.'</body></html>';
-        $response = new Response($html, Response::HTTP_OK, [
-            'Content-Type' => 'text/html; charset=UTF-8',
-            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
-            'Pragma' => 'no-cache',
-            'Expires' => '0',
-        ]);
-
-        return $response;
     }
 
     /**
@@ -581,63 +604,11 @@ class BotGuardSubscriber implements EventSubscriberInterface
         return $request->getPathInfo().('' !== $queryString ? '?'.$queryString : '');
     }
 
-    private function buildCaptchaTarget(Request $request): string
-    {
-        $query = $request->query->all();
-        $query[BotGuardDecider::CHALLENGE_QUERY_PARAM] = '1';
-        $query[self::CAPTCHA_QUERY_PARAM] = '1';
-        $queryString = http_build_query($query);
-
-        return $request->getPathInfo().('' !== $queryString ? '?'.$queryString : '');
-    }
-
     private function isCaptchaAttempt(Request $request): bool
     {
         return $this->isUnderAttackEnabled()
             && $request->isMethod(Request::METHOD_POST)
             && '1' === (string) $request->query->get(self::CAPTCHA_QUERY_PARAM, '');
-    }
-
-    private function handleCaptchaAttempt(Request $request): Response
-    {
-        $rateState = $this->getCaptchaRateState($request);
-        $waitSeconds = (int) ceil((float) ($rateState['lockUntil'] - microtime(true)));
-        if ($waitSeconds > 0) {
-            $response = $this->createCaptchaChallengeResponse(
-                $request,
-                true,
-                sprintf('Слишком много попыток. Подождите %d сек. и попробуйте снова.', $waitSeconds)
-            );
-            $response->setStatusCode(Response::HTTP_TOO_MANY_REQUESTS);
-            $response->headers->set('Retry-After', (string) $waitSeconds);
-
-            return $response;
-        }
-
-        if (!$this->validateCaptchaResponse($request)) {
-            $wait = $this->registerCaptchaFailedAttempt($request);
-            if ($wait > 0) {
-                $response = $this->createCaptchaChallengeResponse(
-                    $request,
-                    true,
-                    sprintf('Неверный ответ. Новая попытка через %d сек.', $wait)
-                );
-                $response->setStatusCode(Response::HTTP_TOO_MANY_REQUESTS);
-                $response->headers->set('Retry-After', (string) $wait);
-
-                return $response;
-            }
-
-            return $this->createCaptchaChallengeResponse($request, true);
-        }
-
-        $this->resetCaptchaRateState($request);
-        $response = $this->createChallengeCleanupResponse($request);
-        $response->headers->setCookie($this->createAccessCookie($request));
-        $response->headers->setCookie($this->createJsChallengeCookie($request));
-        $response->headers->clearCookie(BotGuardDecider::CHALLENGE_COOKIE_NAME, '/');
-
-        return $response;
     }
 
     private function isRateLimitExceeded(Request $request): bool
@@ -650,6 +621,10 @@ class BotGuardSubscriber implements EventSubscriberInterface
             return false;
         }
 
+        if ($this->decider->isRequestWhitelisted($request)) {
+            return false;
+        }
+
         $config = $this->decider->getRateLimitConfig();
 
         return $this->rateLimiter->isExceeded(
@@ -659,185 +634,6 @@ class BotGuardSubscriber implements EventSubscriberInterface
             (int) $config['windowSeconds'],
             false
         );
-    }
-
-    private function validateCaptchaResponse(Request $request): bool
-    {
-        $token = trim((string) $request->request->get(self::CAPTCHA_TOKEN_FIELD, ''));
-        $answer = trim((string) $request->request->get(self::CAPTCHA_ANSWER_FIELD, ''));
-        if ('' === $token || '' === $answer) {
-            return false;
-        }
-
-        [$payload, $signature] = array_pad(explode('.', $token, 2), 2, '');
-        if ('' === $payload || '' === $signature) {
-            return false;
-        }
-
-        $expectedSignature = hash_hmac('sha256', $payload, $this->appSecret);
-        if (!hash_equals($expectedSignature, $signature)) {
-            return false;
-        }
-
-        $decoded = json_decode((string) base64_decode(strtr($payload, '-_', '+/'), true), true);
-        if (!is_array($decoded)) {
-            return false;
-        }
-
-        $exp = isset($decoded['exp']) ? (int) $decoded['exp'] : 0;
-        if ($exp < time()) {
-            return false;
-        }
-
-        $ipHash = isset($decoded['ip']) ? (string) $decoded['ip'] : '';
-        $uaHash = isset($decoded['ua']) ? (string) $decoded['ua'] : '';
-        $salt = isset($decoded['salt']) ? (string) $decoded['salt'] : '';
-        $answerHash = isset($decoded['answer']) ? (string) $decoded['answer'] : '';
-        if ('' === $ipHash || '' === $uaHash || '' === $salt || '' === $answerHash) {
-            return false;
-        }
-
-        $actualIpHash = hash('sha256', BotGuardIpFingerprint::build((string) $request->getClientIp()));
-        if (!hash_equals($ipHash, $actualIpHash)) {
-            return false;
-        }
-
-        $actualUaHash = hash('sha256', mb_strtolower(trim((string) $request->headers->get('User-Agent', ''))));
-        if (!hash_equals($uaHash, $actualUaHash)) {
-            return false;
-        }
-
-        $normalizedAnswer = mb_strtolower(preg_replace('/\s+/', '', $answer) ?? '');
-        if ('' === $normalizedAnswer) {
-            return false;
-        }
-
-        $actualAnswerHash = hash_hmac('sha256', $normalizedAnswer.'|'.$salt, $this->appSecret);
-
-        return hash_equals($answerHash, $actualAnswerHash);
-    }
-
-    /**
-     * @return array{question: string, token: string}
-     */
-    private function buildCaptchaChallenge(Request $request): array
-    {
-        $left = random_int(11, 49);
-        $right = random_int(3, 21);
-        $isPlus = 1 === random_int(0, 1);
-        if (!$isPlus && $right > $left) {
-            $tmp = $right;
-            $right = $left;
-            $left = $tmp;
-        }
-
-        $answer = $isPlus ? (string) ($left + $right) : (string) ($left - $right);
-        $question = sprintf('Решите пример: %d %s %d = ?', $left, $isPlus ? '+' : '-', $right);
-        $salt = bin2hex(random_bytes(8));
-        $payload = [
-            'exp' => time() + self::CAPTCHA_TTL_SECONDS,
-            'ip' => hash('sha256', BotGuardIpFingerprint::build((string) $request->getClientIp())),
-            'ua' => hash('sha256', mb_strtolower(trim((string) $request->headers->get('User-Agent', '')))),
-            'salt' => $salt,
-            'answer' => hash_hmac('sha256', $answer.'|'.$salt, $this->appSecret),
-        ];
-        $encoded = rtrim(strtr(base64_encode((string) json_encode($payload)), '+/', '-_'), '=');
-        $signature = hash_hmac('sha256', $encoded, $this->appSecret);
-
-        try {
-            return [
-                'question' => $question,
-                'token' => $encoded.'.'.$signature,
-            ];
-        } catch (\Throwable $e) {
-            return [
-                'question' => 'Решите пример: 3 + 4 = ?',
-                'token' => '',
-            ];
-        }
-    }
-
-    private function buildIpFingerprint(string $ip): string
-    {
-        return BotGuardIpFingerprint::build($ip);
-    }
-
-    /**
-     * @return array{fails:int,lockUntil:float}
-     */
-    private function getCaptchaRateState(Request $request): array
-    {
-        if (null === $this->cache) {
-            return ['fails' => 0, 'lockUntil' => 0.0];
-        }
-
-        $key = self::CAPTCHA_RATE_LIMIT_PREFIX.hash('sha256', BotGuardIpFingerprint::build((string) $request->getClientIp()));
-
-        try {
-            $state = $this->cache->get($key, function (ItemInterface $item): array {
-                $item->expiresAfter(self::CAPTCHA_STATE_TTL_SECONDS);
-
-                return ['fails' => 0, 'lockUntil' => 0.0];
-            });
-        } catch (\Throwable $e) {
-            return ['fails' => 0, 'lockUntil' => 0.0];
-        }
-
-        if (!is_array($state)) {
-            return ['fails' => 0, 'lockUntil' => 0.0];
-        }
-
-        return [
-            'fails' => isset($state['fails']) ? (int) $state['fails'] : 0,
-            'lockUntil' => isset($state['lockUntil']) ? (float) $state['lockUntil'] : 0.0,
-        ];
-    }
-
-    private function registerCaptchaFailedAttempt(Request $request): int
-    {
-        if (null === $this->cache) {
-            return 0;
-        }
-
-        $state = $this->getCaptchaRateState($request);
-        $fails = max(0, (int) $state['fails']) + 1;
-        $delay = min(self::CAPTCHA_MAX_DELAY_SECONDS, self::CAPTCHA_BASE_DELAY_SECONDS * (2 ** ($fails - 1)));
-        $lockUntil = microtime(true) + $delay;
-        $this->saveCaptchaRateState($request, $fails, $lockUntil);
-
-        return (int) $delay;
-    }
-
-    private function resetCaptchaRateState(Request $request): void
-    {
-        if (null === $this->cache) {
-            return;
-        }
-
-        $this->saveCaptchaRateState($request, 0, 0.0);
-    }
-
-    private function saveCaptchaRateState(Request $request, int $fails, float $lockUntil): void
-    {
-        if (null === $this->cache) {
-            return;
-        }
-
-        $key = self::CAPTCHA_RATE_LIMIT_PREFIX.hash('sha256', BotGuardIpFingerprint::build((string) $request->getClientIp()));
-
-        try {
-            $this->cache->delete($key);
-            $this->cache->get($key, function (ItemInterface $item) use ($fails, $lockUntil): array {
-                $item->expiresAfter(self::CAPTCHA_STATE_TTL_SECONDS);
-
-                return [
-                    'fails' => max(0, $fails),
-                    'lockUntil' => max(0.0, $lockUntil),
-                ];
-            });
-        } catch (\Throwable $e) {
-            // При ошибке кэша не блокируем легитимный трафик.
-        }
     }
 
     private function createAccessCookie(Request $request): Cookie

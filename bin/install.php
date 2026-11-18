@@ -6,19 +6,26 @@ declare(strict_types=1);
 const REQUIRED_PACKAGES = [
     'darvinstudio/darvin-admin-bundle' => '6.6.0',
     'darvinstudio/darvin-admin-frontend-bundle' => '6.2.0',
+    'darvinstudio/darvin-ecommerce-bundle' => '10.0.0',
+    'symfony/framework-bundle' => '4.4.0',
+    'symfony/process' => '4.4.0',
 ];
 
-$options = getopt('', ['project-dir::']);
+$options = getopt('', ['project-dir:', 'dry-run', 'allow-untested-frontend']);
+$dryRun = isset($options['dry-run']);
+if (PHP_VERSION_ID < 70300) {
+    fail('PHP 7.3 or newer is required.');
+}
 $moduleDir = dirname(__DIR__);
 $projectDir = resolveProjectDir($options);
 
 validateComposerLock($projectDir);
 $installedPackages = getInstalledPackages($projectDir);
-validateRequiredPackages($installedPackages);
+validateRequiredPackages($installedPackages, isset($options['allow-untested-frontend']));
 
-[$copied, $updated] = copyModuleFiles($moduleDir.'/files', $projectDir);
+[$copied, $updated] = copyModuleFiles($moduleDir.'/files', $projectDir, $dryRun);
 
-echo sprintf("BotGuard deployment done. New files: %d, updated files: %d.\n", $copied, $updated);
+echo sprintf("BotGuard %s. New files: %d, updated files: %d.\n", $dryRun ? 'dry run (no files written)' : 'deployment done', $copied, $updated);
 printPostInstallHints($projectDir);
 
 function resolveProjectDir(array $options): string
@@ -77,7 +84,7 @@ function getInstalledPackages(string $projectDir): array
 /**
  * @param array<string,string> $installedPackages
  */
-function validateRequiredPackages(array $installedPackages): void
+function validateRequiredPackages(array $installedPackages, bool $allowUntestedFrontend): void
 {
     foreach (REQUIRED_PACKAGES as $package => $minVersion) {
         if (!isset($installedPackages[$package])) {
@@ -85,6 +92,10 @@ function validateRequiredPackages(array $installedPackages): void
         }
 
         $installedVersion = $installedPackages[$package];
+        if ('darvinstudio/darvin-admin-frontend-bundle' === $package && 0 === strpos($installedVersion, 'dev-') && $allowUntestedFrontend) {
+            fwrite(STDERR, "Warning: unversioned admin frontend explicitly accepted; verify its compatibility separately.\n");
+            continue;
+        }
         if (version_compare($installedVersion, $minVersion, '<')) {
             fail(sprintf(
                 'Package "%s" version is too old: %s. Required: >= %s.',
@@ -100,6 +111,9 @@ function normalizeVersion(string $version): string
 {
     $version = trim($version);
     $version = ltrim($version, 'v');
+    if (0 === strpos($version, 'dev-')) {
+        return $version;
+    }
 
     $dashPos = strpos($version, '-');
     if (false !== $dashPos) {
@@ -112,7 +126,7 @@ function normalizeVersion(string $version): string
 /**
  * @return array{int,int}
  */
-function copyModuleFiles(string $sourceRoot, string $targetRoot): array
+function copyModuleFiles(string $sourceRoot, string $targetRoot, bool $dryRun): array
 {
     if (!is_dir($sourceRoot)) {
         fail(sprintf('Module files directory does not exist: %s', $sourceRoot));
@@ -123,6 +137,8 @@ function copyModuleFiles(string $sourceRoot, string $targetRoot): array
         RecursiveIteratorIterator::SELF_FIRST
     );
 
+    $backupRoot = $targetRoot.'/var/bot_guard-install-backup/'.date('Ymd-His').'-'.bin2hex(random_bytes(4));
+    $backedUp = false;
     $copied = 0;
     $updated = 0;
 
@@ -132,14 +148,14 @@ function copyModuleFiles(string $sourceRoot, string $targetRoot): array
         $targetPath = $targetRoot.DIRECTORY_SEPARATOR.$relativePath;
 
         if ($item->isDir()) {
-            if (!is_dir($targetPath) && !mkdir($targetPath, 0775, true) && !is_dir($targetPath)) {
+            if (!$dryRun && !is_dir($targetPath) && !mkdir($targetPath, 0775, true) && !is_dir($targetPath)) {
                 fail(sprintf('Unable to create directory: %s', $targetPath));
             }
             continue;
         }
 
         $targetDir = dirname($targetPath);
-        if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+        if (!$dryRun && !is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
             fail(sprintf('Unable to create directory: %s', $targetDir));
         }
 
@@ -151,7 +167,17 @@ function copyModuleFiles(string $sourceRoot, string $targetRoot): array
             continue;
         }
 
-        if (!copy($sourcePath, $targetPath)) {
+        if (!$dryRun && $targetExists) {
+            $backupPath = $backupRoot.DIRECTORY_SEPARATOR.$relativePath;
+            if (!is_dir(dirname($backupPath)) && !mkdir(dirname($backupPath), 0700, true) && !is_dir(dirname($backupPath))) {
+                fail('Unable to create backup directory.');
+            }
+            if (!copy($targetPath, $backupPath)) {
+                fail(sprintf('Unable to back up: %s', $relativePath));
+            }
+            $backedUp = true;
+        }
+        if (!$dryRun && !copy($sourcePath, $targetPath)) {
             fail(sprintf('Unable to copy file: %s', $relativePath));
         }
 
@@ -164,25 +190,23 @@ function copyModuleFiles(string $sourceRoot, string $targetRoot): array
         }
     }
 
+    if ($backedUp) {
+        echo "Previous files saved in: ".$backupRoot."\n";
+    }
+
     return [$copied, $updated];
 }
 
 function printPostInstallHints(string $projectDir): void
 {
-    echo "\nCheck these integration points:\n";
-    echo "- Merge section snippet from config/snippets/darvin_admin.sections.yaml into config/packages/darvin_admin.yaml\n";
-    echo "- Merge translation entries from translations/admin.ru.bot_guard.yaml into translations/admin.ru.yaml\n";
-    echo "- Run migration: php bin/console doctrine:migrations:migrate --no-interaction\n";
-    echo "- Run cache clear: php bin/console cache:clear --env=prod\n";
-    echo "- Add cleanup cron: php bin/console app:bot-guard:cleanup --env=prod\n";
+    echo "\nIntegration steps (not executed automatically):\n";
+    echo "- Merge config/snippets/services.bot_guard.yaml into services in config/services.yaml (including _defaults.bind).\n";
+    echo "- Configure bot_guard.integration_prefixes and bot_guard.integration_post_paths for authenticated APIs only.\n";
+    echo "- Review catalog budgets, slots and sort fields. See INSTALL.md.\n";
+    echo "- config/packages/bot_guard.yaml already registers admin sections and translations.\n";
+    echo "- Run migrations, clear production cache, and warm crawler identities per INSTALL.md.\n";
+    echo "- Preserve var/bot_guard across releases; it is independent of var/cache.\n";
 
-    $darvinAdminConfig = $projectDir.'/config/packages/darvin_admin.yaml';
-    if (is_file($darvinAdminConfig)) {
-        $content = file_get_contents($darvinAdminConfig);
-        if (false !== $content && false === strpos($content, 'App\Entity\BotGuard\BotGuardSettings')) {
-            echo "Warning: BotGuard sections are not found in config/packages/darvin_admin.yaml\n";
-        }
-    }
 }
 
 /**

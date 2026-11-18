@@ -1,0 +1,7 @@
+# В public/.htaccess внутрь IfModule mod_rewrite.c после RewriteEngine On,
+# до редиректов/передачи запроса в index.php. Это фрагмент, не полный .htaccess.
+RewriteRule ^(?:wp-admin|wp-content|wp-includes|wordpress)(?:/|$) - [R=404,L,NC]
+RewriteRule ^(?:wp-login\.php|xmlrpc\.php)$ - [R=404,L,NC]
+RewriteRule (^|/)(?:\.git|\.env(?:\.[^/]*)?)(?:/|$) - [R=404,L,NC]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^(?!index\.php(?:/|$)).+\.php(?:/|$) - [R=404,L,NC]

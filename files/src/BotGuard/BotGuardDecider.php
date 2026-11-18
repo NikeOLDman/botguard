@@ -51,6 +51,8 @@ class BotGuardDecider
      * @var BotGuardCatalogFilterPageRegistry
      */
     private $catalogFilterPages;
+    private $crawlerVerifier;
+    private $configurationStore;
 
     public function __construct(
         EntityManagerInterface $em,
@@ -58,6 +60,8 @@ class BotGuardDecider
         BotGuardReferrerMatcher $referrerMatcher,
         BotGuardRateLimiter $rateLimiter,
         BotGuardCatalogFilterPageRegistry $catalogFilterPages,
+        BotGuardCrawlerVerifier $crawlerVerifier,
+        BotGuardConfigurationStore $configurationStore,
         ?CacheInterface $cache = null
     ) {
         $this->em = $em;
@@ -65,6 +69,8 @@ class BotGuardDecider
         $this->referrerMatcher = $referrerMatcher;
         $this->rateLimiter = $rateLimiter;
         $this->catalogFilterPages = $catalogFilterPages;
+        $this->crawlerVerifier = $crawlerVerifier;
+        $this->configurationStore = $configurationStore;
         $this->cache = $cache;
     }
 
@@ -83,27 +89,21 @@ class BotGuardDecider
             return $this->allow($statusCode);
         }
 
-        if ($this->isWhitelistedForCookieCheck($settings, $userAgent)) {
+        if (BotGuardRequestPolicy::isSeoFile($request)) {
             return $this->allow($statusCode);
+        }
+
+        if ($this->isRequestWhitelisted($request)) {
+            return $this->allow($statusCode);
+        }
+
+        if ($request->attributes->get('_bot_guard_crawler_pending')) {
+            // Never send a noindex challenge to a crawler during a DNS outage.
+            return $this->deny('crawler_verification_unavailable', null, null, 503);
         }
 
         if (!empty($settings['blockEmptyUserAgent']) && '' === trim($userAgent)) {
             return $this->deny('empty_user_agent', null, null, $statusCode);
-        }
-
-        if (!empty($settings['underAttack'])) {
-            // JS challenge on /filtered breaks the product filter; soft cookie check is enough.
-            if (false !== stripos($uri, '/filtered')) {
-                return $this->decideSoftCookieProtection($request, $statusCode);
-            }
-
-            $underAttackDecision = $this->decideStrictProtection($request, 'js_challenge_required', $statusCode);
-
-            if (null !== $underAttackDecision) {
-                return $underAttackDecision;
-            }
-
-            return $this->allow($statusCode);
         }
 
         $softCookieRulesMatched = false;
@@ -128,6 +128,10 @@ class BotGuardDecider
             if ($this->matchesRule($rule, $userAgent, $ip, $uri)) {
                 return $this->deny('rule_match', $rule['name'], $rule['pattern'], $statusCode);
             }
+        }
+
+        if (!empty($settings['underAttack'])) {
+            return $this->decideStrictProtection($request, 'js_challenge_required', $statusCode) ?? $this->allow($statusCode);
         }
 
         if ($strictCookieRulesMatched) {
@@ -169,7 +173,7 @@ class BotGuardDecider
     {
         $settings = $settings ?? $this->getSettingsData();
 
-        return !empty($settings['underAttack']) && !empty($settings['rateLimitEnabled']);
+        return !empty($settings['enabled']) && !empty($settings['rateLimitEnabled']);
     }
 
     /**
@@ -191,7 +195,7 @@ class BotGuardDecider
     {
         $settings = $this->getSettingsData();
 
-        if (empty($settings['pathRateLimitEnabled'])) {
+        if (empty($settings['enabled']) || empty($settings['pathRateLimitEnabled'])) {
             return false;
         }
 
@@ -200,7 +204,7 @@ class BotGuardDecider
             return false;
         }
 
-        if ($this->isUserAgentWhitelisted((string) $request->headers->get('User-Agent', ''))) {
+        if ($this->isRequestWhitelisted($request)) {
             return false;
         }
 
@@ -209,7 +213,7 @@ class BotGuardDecider
             'path:'.md5($pattern),
             (int) $settings['pathRateLimitMaxRequests'],
             (int) $settings['pathRateLimitWindowSeconds'],
-            true
+            false
         );
     }
 
@@ -220,9 +224,13 @@ class BotGuardDecider
             && $this->hasValidAccessCookie($request);
     }
 
-    public function isUserAgentWhitelisted(string $userAgent): bool
+    public function isRequestWhitelisted(Request $request): bool
     {
-        return $this->isWhitelistedByRawList((string) $this->getSettingsData()['cookieWhitelistUas'], $userAgent);
+        if ($request->attributes->has('_bot_guard_verified_crawler')) {
+            return (bool) $request->attributes->get('_bot_guard_verified_crawler');
+        }
+
+        return $this->crawlerVerifier->isVerified($request, (string) ($this->getSettingsData()['cookieWhitelistUas'] ?? ''));
     }
 
     public function shouldSkipChallengeByReferrer(Request $request, string $challengeReason): bool
@@ -266,6 +274,9 @@ class BotGuardDecider
 
     public function shouldIssueGlobalAccessCookie(Request $request): bool
     {
+        if ($this->isRequestWhitelisted($request)) {
+            return false;
+        }
         if ($this->isUnderAttackEnabled()) {
             return false;
         }
@@ -374,10 +385,11 @@ class BotGuardDecider
             return false;
         }
 
-        // Dynamic filter URLs (/catalog/filtered/...) must use soft cookie check too —
-        // strict JS challenge returns HTML without .l-main and breaks AJAX filter UI.
+        // Arbitrary filter combinations must honour the configured strict rule.
+        // The AJAX guard navigates to the requested URL to complete verification.
+        // Keep the soft exception only for the curated CMS landing pages below.
         if (false !== stripos($pathInfo, '/filtered')) {
-            return true;
+            return false;
         }
 
         return $this->catalogFilterPages->isCatalogFilterPagePath($pathInfo);
@@ -512,17 +524,27 @@ class BotGuardDecider
         ];
 
         if (null === $this->cache) {
-            return $this->loadSettingsDataFromDatabase($defaults);
+            try {
+                $settings = $this->loadSettingsDataFromDatabase($defaults);
+                $this->configurationStore->save('settings', $settings);
+
+                return $settings;
+            } catch (\Throwable $e) {
+                return $this->configurationStore->load('settings') ?? array_replace($defaults, ['underAttack' => true]);
+            }
         }
 
         try {
             return $this->cache->get(self::SETTINGS_CACHE_KEY, function (ItemInterface $item) use ($defaults): array {
                 $item->expiresAfter(self::CACHE_TTL_SECONDS);
 
-                return $this->loadSettingsDataFromDatabase($defaults);
+                $settings = $this->loadSettingsDataFromDatabase($defaults);
+                $this->configurationStore->save('settings', $settings);
+
+                return $settings;
             });
         } catch (\Throwable $e) {
-            return $defaults;
+            return $this->configurationStore->load('settings') ?? array_replace($defaults, ['underAttack' => true]);
         }
     }
 
@@ -573,17 +595,27 @@ class BotGuardDecider
     private function getRulesData(): array
     {
         if (null === $this->cache) {
-            return $this->loadRulesDataFromDatabase();
+            try {
+                $rules = $this->loadRulesDataFromDatabase();
+                $this->configurationStore->save('rules', $rules);
+
+                return $rules;
+            } catch (\Throwable $e) {
+                return $this->configurationStore->load('rules') ?? [];
+            }
         }
 
         try {
             return $this->cache->get(self::RULES_CACHE_KEY, function (ItemInterface $item): array {
                 $item->expiresAfter(self::CACHE_TTL_SECONDS);
 
-                return $this->loadRulesDataFromDatabase();
+                $rules = $this->loadRulesDataFromDatabase();
+                $this->configurationStore->save('rules', $rules);
+
+                return $rules;
             });
         } catch (\Throwable $e) {
-            return [];
+            return $this->configurationStore->load('rules') ?? [];
         }
     }
 
@@ -669,40 +701,6 @@ class BotGuardDecider
         }
 
         return false !== stripos($userAgent, $userAgentPattern);
-    }
-
-    /**
-     * @param array<string, mixed> $settings
-     */
-    private function isWhitelistedForCookieCheck(array $settings, string $userAgent): bool
-    {
-        if ('' === trim($userAgent)) {
-            return false;
-        }
-
-        return $this->isWhitelistedByRawList((string) $settings['cookieWhitelistUas'], $userAgent);
-    }
-
-    private function isWhitelistedByRawList(string $raw, string $userAgent): bool
-    {
-        if ('' === trim($raw) || '' === trim($userAgent)) {
-            return false;
-        }
-
-        $items = preg_split('/[\r\n,]+/', $raw) ?: [];
-
-        foreach ($items as $item) {
-            $item = trim($item);
-            if ('' === $item) {
-                continue;
-            }
-
-            if (false !== mb_stripos($userAgent, $item)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private function isChallengeRetry(Request $request): bool

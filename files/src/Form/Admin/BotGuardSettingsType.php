@@ -57,12 +57,12 @@ class BotGuardSettingsType extends AbstractType
                 'attr' => ['min' => 1, 'max' => 3650],
             ])
             ->add('cookieWhitelistUserAgents', TextareaType::class, [
-                'label' => 'Белый список User-Agent',
+                'label' => 'User-Agent поисковых и служебных роботов',
                 'required' => false,
-                'help' => 'По одному значению в строке или через запятую. Действует всегда, включая режим «Под атакой».',
+                'help' => 'Яндекс и Google, включая Метрику, Директ и инструменты проверки, допускаются после подтверждения IP через обратный и прямой DNS. Одного User-Agent недостаточно. Подтверждённые роботы проходят без JS-проверки в обоих режимах.',
                 'attr' => [
                     'rows' => 5,
-                    'placeholder' => "YandexBot\nGooglebot\nbingbot",
+                    'placeholder' => "YandexBot\nYandexMetrika\nYaDirectFetcher\nGooglebot\nGoogle-InspectionTool",
                 ],
             ])
             ->add('jsChallengeMinDelayMs', IntegerType::class, [
@@ -73,12 +73,12 @@ class BotGuardSettingsType extends AbstractType
             ->add('catalogFilterPagesSoftCheck', CheckboxType::class, [
                 'label' => 'Мягкая проверка для страниц фильтров каталога',
                 'required' => false,
-                'help' => 'Все URL с /filtered/ (динамический фильтр и страницы из админки) проходят мягкую cookie-проверку вместо строгой JS. Иначе AJAX-фильтр получает HTML челленджа и ломает список товаров.',
+                'help' => 'Мягкая проверка действует только для подготовленных страниц фильтров из CMS вне режима «Под атакой». Динамические URL /filtered/ соблюдают строгое правило. При проверке AJAX-фильтр открывает выбранный URL, сохраняя параметры.',
             ])
             ->add('pathRateLimitEnabled', CheckboxType::class, [
                 'label' => 'Rate limit для защищённых путей',
                 'required' => false,
-                'help' => 'Лимит по подсети /24, работает без режима «Под атакой».',
+                'help' => 'Атомарный лимит на IP в обоих режимах. Подтверждённые роботы Яндекса и Google используют отдельный бюджет каталога.',
             ])
             ->add('pathRateLimitUriPattern', TextareaType::class, [
                 'label' => 'URI для path rate limit',
@@ -97,7 +97,7 @@ class BotGuardSettingsType extends AbstractType
                 'attr' => ['min' => 10, 'max' => 3600],
             ])
             ->add('rateLimitEnabled', CheckboxType::class, [
-                'label' => 'Rate limit в режиме «Под атакой»',
+                'label' => 'Общий rate limit на IP',
                 'required' => false,
             ])
             ->add('rateLimitMaxRequests', IntegerType::class, [

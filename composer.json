@@ -4,8 +4,11 @@
     "type": "library",
     "license": "proprietary",
     "require": {
-        "php": ">=7.2.5",
+        "php": ">=7.3",
         "darvinstudio/darvin-admin-bundle": "^6.6",
-        "darvinstudio/darvin-admin-frontend-bundle": "^6.2"
+        "darvinstudio/darvin-admin-frontend-bundle": "^6.2",
+        "darvinstudio/darvin-ecommerce-bundle": "^10.0",
+        "symfony/framework-bundle": "^4.4 || ^5.2",
+        "symfony/process": "^4.4 || ^5.2"
     }
 }

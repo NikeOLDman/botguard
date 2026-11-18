@@ -2,7 +2,7 @@ services:
     _defaults:
         bind:
             $appSecret:               '%kernel.secret%'
-            # Without bind, nullable $cache stays null (several CacheInterface pools) and JS challenge verify fails.
+            # Bind the application cache explicitly for settings, forms and log deduplication.
             Symfony\Contracts\Cache\CacheInterface $cache: '@cache.app'
 
     Darvin\ECommerceBundle\Router\CatalogFilteredRouterInterface: '@darvin_ecommerce.catalog_filtered.router'
@@ -11,3 +11,55 @@ services:
     App\Command\BotGuardCollectMetricsCommand:
         tags:
             - { name: 'console.command', command: 'app:bot-guard:collect-metrics' }
+
+
+    App\BotGuard\BotGuardRateLimiter:
+        arguments:
+            $stateDirectory: '%kernel.project_dir%/var/bot_guard/rate'
+
+    App\BotGuard\BotGuardConfigurationStore:
+        arguments:
+            $directory: '%kernel.project_dir%/var/bot_guard/configuration'
+
+    App\BotGuard\BotGuardCrawlerVerifier:
+        arguments:
+            $cache: '@app.cache.bot_guard'
+
+    app.cache.bot_guard:
+        class: Symfony\Component\Cache\Adapter\FilesystemAdapter
+        arguments:
+            $namespace: crawler_verification_v1
+            $defaultLifetime: 300
+            $directory: '%kernel.project_dir%/var/bot_guard/cache'
+
+    App\BotGuard\BotGuardRequestPolicy:
+        arguments:
+            $integrationPrefixes: '%bot_guard.integration_prefixes%'
+            $postPaths: '%bot_guard.integration_post_paths%'
+
+    App\BotGuard\BotGuardCatalogAdmission:
+        arguments:
+            $directory: '%kernel.project_dir%/var/bot_guard/catalog'
+            $enabled: '%bot_guard.catalog_limits_enabled%'
+            $budgets: '%bot_guard.catalog_budgets%'
+            $slots: '%bot_guard.catalog_slots%'
+            $allowedSorts: '%bot_guard.catalog_sorts%'
+
+    App\BotGuard\Darvin\BotGuardCatalogShowAction:
+        decorates: darvin_ecommerce.catalog.controller.action.show
+        arguments:
+            $inner: '@App\BotGuard\Darvin\BotGuardCatalogShowAction.inner'
+
+    App\EventSubscriber\BotGuardAjaxHtmlGuardAssetSubscriber:
+        arguments:
+            $projectDir: '%kernel.project_dir%'
+
+    App\BotGuard\BotGuardSiteHealthChecker:
+        arguments:
+            $locale: '%locale%'
+            $templates: '%bot_guard.uptime_templates%'
+
+    App\EventSubscriber\BotGuardUptimeSubscriber:
+        arguments:
+            $enabled: '%bot_guard.uptime_enabled%'
+            $trustedIps: '%bot_guard.uptime_trusted_ips%'

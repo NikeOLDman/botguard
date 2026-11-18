@@ -1,0 +1,22 @@
+{% extends '@!DarvinAdmin/base.html.twig' %}
+
+{# Retain the vendor assets and flash handling; expire the faulty cached admin JS. #}
+{% block javascripts %}
+    <script src="{{ asset('bundles/bazingajstranslation/js/translator.min.js') }}"></script>
+    <script src="{{ path('bazinga_jstranslation_js', {'domain': 'admin'}) }}?locales=en{% if 'en' != app.request.locale %},{{ app.request.locale }}{% endif %}"></script>
+    <script src="{{ path('bazinga_jstranslation_js', {'domain': 'validators'}) }}?locales=en{% if 'en' != app.request.locale %},{{ app.request.locale }}{% endif %}"></script>
+
+    {% set admin_app = asset(darvin_admin.frontendPath ~ (app.debug ? '/assets/build-dev/app.js' : '/assets/build/app.js')) %}
+    <script src="{{ admin_app ~ ('?' in admin_app ? '&' : '?') ~ 'notifications_fix=20261118' }}"></script>
+    <script src="{{ asset('bundles/fosckeditor/ckeditor.js') }}"></script>
+
+    {% if flashes is not empty %}
+        <script>
+            {% for type, messages in flashes %}
+                {% for message in messages %}
+                    App.notify('{{ message|e('js') }}', '{{ type }}');
+                {% endfor %}
+            {% endfor %}
+        </script>
+    {% endif %}
+{% endblock %}

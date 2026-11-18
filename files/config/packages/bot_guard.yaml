@@ -1,8 +1,19 @@
 # Bot Guard module — подключается автоматически (config/packages/*.yaml).
 # Для переноса на другой сайт: скопировать src/BotGuard, src/Entity/BotGuard,
 # src/EventSubscriber/BotGuard*, src/Controller/BotGuard*, config/bot_guard/, config/packages/bot_guard.yaml,
-# public/assets/bot-guard/ (form-shield.js, ajax-html-guard.js), templates/admin/bot_guard/, миграции.
-# ajax-html-guard.js защищает AJAX-фильтр каталога без правок filter-smart.js.
+# public/assets/bot-guard/, templates/admin/bot_guard/, миграции.
+
+parameters:
+    # Configure authenticated machine endpoints in the destination project's services.yaml.
+    bot_guard.integration_prefixes: []
+    bot_guard.integration_post_paths: []
+    bot_guard.catalog_limits_enabled: true
+    bot_guard.catalog_budgets: { anonymous: 120, browser: 240, crawler: 180 }
+    bot_guard.catalog_slots: { anonymous: 2, browser: 4, crawler: 2 }
+    bot_guard.uptime_enabled: false
+    bot_guard.uptime_trusted_ips: []
+    bot_guard.uptime_templates: ['@@DarvinPage/homepage.html.twig']
+    bot_guard.catalog_sorts: ['', 'discount_price', 'o.position', 'o.id', 'translations.title', 'o.updatedAt']
 
 framework:
     translator:

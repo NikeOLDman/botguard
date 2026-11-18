@@ -1,0 +1,9 @@
+# BotGuard emergency: блок атакующего UA до PHP (nginx map $is_bot / $block_request).
+# Добавьте в /etc/nginx/conf.d/bot_protection.conf внутрь map $http_user_agent $is_bot:
+#
+#   # Атака Sep 2026: headless-флот с Macintosh; Intel Mac OS X 10_15_7
+#   "~*Macintosh; Intel Mac OS X 10_15_7" 1;
+#
+# Важно: кавычки обязательны из‑за ';' в User-Agent.
+# В server{} уже должно быть: if ($block_request) { return 444; }
+# При необходимости: geo $skip_bot_ua { default 0; YOUR.IP 1; } и учёт в $block_request.

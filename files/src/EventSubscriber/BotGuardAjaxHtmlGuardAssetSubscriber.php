@@ -12,10 +12,17 @@ use Symfony\Component\HttpKernel\KernelEvents;
 
 /**
  * Injects BotGuard AJAX HTML guard for catalogue filter fetch() calls.
- * Independent of site frontend assets (filter-smart.js stays untouched).
+ * Delivered separately from the site's compiled frontend assets.
  */
 final class BotGuardAjaxHtmlGuardAssetSubscriber implements EventSubscriberInterface
 {
+    private $assetVersion;
+
+    public function __construct(string $projectDir)
+    {
+        $this->assetVersion = substr(hash_file('sha256', $projectDir.'/public/assets/bot-guard/ajax-html-guard.js'), 0, 12);
+    }
+
     public static function getSubscribedEvents(): array
     {
         return [
@@ -57,8 +64,9 @@ final class BotGuardAjaxHtmlGuardAssetSubscriber implements EventSubscriberInter
         ];
 
         $injection = sprintf(
-            '<script>window.__bgAjaxHtmlGuard=%s;</script><script src="/assets/bot-guard/ajax-html-guard.js"></script>',
-            json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            '<script>window.__bgAjaxHtmlGuard=%s;</script><script src="/assets/bot-guard/ajax-html-guard.js?v=%s"></script>',
+            json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            $this->assetVersion
         );
 
         $response->setContent(str_ireplace('</body>', $injection.'</body>', $content));

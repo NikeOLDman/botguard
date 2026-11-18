@@ -36,10 +36,15 @@ final class BotGuardChallengeController extends AbstractController
      */
     public function verify(Request $request): JsonResponse
     {
-        $nonce = trim((string) $request->request->get('nonce', ''));
-        $returnPath = $this->jsChallenge->verify($request, $nonce);
+        $data = $request->request->all();
+        $nonce = $data['nonce'] ?? '';
+        $solution = $data['solution'] ?? '';
+        $returnPath = $this->jsChallenge->verify($request, is_string($nonce) ? $nonce : '', is_string($solution) ? $solution : '');
 
         if (null === $returnPath) {
+            if ($request->attributes->get(\App\BotGuard\BotGuardRateLimiter::UNAVAILABLE_ATTRIBUTE)) {
+                return \App\BotGuard\BotGuardResponse::rateLimited($request);
+            }
             return new JsonResponse(['ok' => false], Response::HTTP_FORBIDDEN);
         }
 
